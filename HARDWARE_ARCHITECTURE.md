@@ -1,9 +1,11 @@
-# Handheld Hardware Architecture & Bill of Materials
+# Handheld/Field Unit Hardware Architecture & Bill of Materials
 
-Goal: a pocketable, battery-powered, touchscreen field tool that clips
-directly onto a Vista panel's 4-wire keypad (ECP) bus — no Envisalink or
-other intermediary module required — and runs the zone-discovery (and
-eventually broader config) tooling in `vista_tool/`.
+Goal: a robust, technician-borrowable tool that clips directly onto a Vista
+panel's 4-wire keypad (ECP) bus — no Envisalink or other intermediary
+module required — for zone/config discovery today, config writes next, and
+eventually broader datalogging (Polling Loop, zone-terminal I/O) as the
+project grows. See `CONCEPT.md` for the full product concept, UX flow, and
+roadmap this hardware serves; this doc stays focused on the physical build.
 
 ## Why two processors, not one
 
@@ -18,70 +20,94 @@ way `esphome-vistaECP` already validates:
 
 - **RP2040 coprocessor** — owns the ECP bus in real time: bit-level pulse
   timing, address-slot arbitration, keystroke injection, alpha-display
-  capture. Talks to the Pi over USB serial using the plain text protocol in
-  `firmware/SERIAL_PROTOCOL.md`. This is a near-direct port of
-  esphome-vistaECP's `VistaECP` library running outside ESPHome (its own
-  README notes the library has no ESPHome dependency and can be called
-  directly) — that repo's `VistaAlarm.yaml` already documents a stock RP2040
-  Pico pinout (RX/yellow=GPIO21, TX/green=GPIO20, monitor=GPIO18) and both a
-  preferred non-isolated resistor-divider circuit and a transistor-based
-  alternative for the transmit side.
+  capture, and keypad-address sniffing (scanning pulse-slot 3 — addresses
+  16-23 per esphome-vistaECP's own pulse-allocation notes — for active
+  keypads before the tool claims an address). Talks to the Pi over USB
+  serial using the plain text protocol in `firmware/SERIAL_PROTOCOL.md`.
+  This is a near-direct port of esphome-vistaECP's `VistaECP` library
+  running outside ESPHome (its own README notes the library has no ESPHome
+  dependency and can be called directly).
 - **Raspberry Pi** — everything that isn't time-critical: the `vista_tool`
-  Python backend (the *56/*82 walk logic, safety checks, timeouts), the
-  FastAPI web server, and driving the touchscreen in kiosk mode. If the Pi
-  hiccups, worst case is a slow UI update — never a corrupted bus frame.
+  Python backend (walk logic, safety checks, timeouts), the FastAPI web
+  server (serving both the on-device touchscreen and any remote browser on
+  the network — see `CONCEPT.md` networking section), and storage/logging.
+  If the Pi hiccups, worst case is a slow UI update — never a corrupted bus
+  frame.
 
 This also means the RP2040 firmware is a genuinely separate, testable unit:
 it can be bench-validated against a real panel with nothing but a serial
 terminal, before the Pi software, touchscreen, or battery system are even
-wired in.
+wired in — planned as the first real build/test milestone.
 
-## Bill of materials (starting point — swap for parts on hand)
+## Bill of materials (decisions marked; still-open items marked)
 
-| Role | Suggested part | Notes |
+| Role | Part | Status |
 |---|---|---|
-| Compute | Raspberry Pi Zero 2 W | Smallest Pi with enough CPU for Python + a WebSocket UI at 60fps-ish touch response. A Pi 4/5 works too if size/battery budget allows and USB-C PD charging is preferred over a dedicated charge IC. |
-| Bus coprocessor | Raspberry Pi Pico (RP2040) or Pico W | Already has a documented pinout in esphome-vistaECP's own config (`VistaAlarm.yaml`) — least new ground to break in. Pico W's wireless is unused here (Pi handles networking) but costs little extra and keeps sourcing simple. |
-| Display | 3.5"–5" DSI or SPI touchscreen (e.g. Waveshare/HyperPixel/official Pi touch display, resistive or capacitive) | Pick DSI over HDMI+USB-touch where possible — fewer cables, lower power. Resistive touch is more forgiving with gloves, common on field tools. |
-| Battery | Single-cell 18650 Li-ion (2000–3500 mAh) or a slim LiPo pouch cell (2000+ mAh) | "One battery" per your spec — single-cell keeps the charge/protection circuit simple (no series balancing needed). |
-| Charge + power management | Adafruit PowerBoost 1000C (charge + 5V boost + pass-through) or a dedicated USB-C PD trigger + charge IC (e.g. based on IP5306/MCP73871) | PowerBoost-style boards are the simplest path to "plug in USB-C, it charges and runs simultaneously" without designing analog charge circuitry from scratch. |
-| Bus interface (Pico <-> panel) | Resistors + either optocouplers (4N35/TLP521, CTR ≥ 50) or transistors, per esphome-vistaECP's non-isolated "simple version" schematic | That project explicitly recommends the non-isolated simple version as best signal fidelity with minimal bus loading — ground-isolated version is not recommended (loads the bus more). |
-| Panel connection | 4-conductor cable + small screw terminal or keypad-style RJ-style connector | Matches how a real alpha keypad taps the bus (red/black/yellow/green: +12V, GND, data-in, data-out). |
-| Enclosure | 3D-printed or off-the-shelf handheld project box sized to the chosen screen + Pi + Pico + battery stack | Not specified further here — depends on the screen/battery chosen above. |
+| Compute | **Raspberry Pi 4, 8GB** | **Decided** — user has several on hand. Also settles wired Ethernet (built-in) and headroom for a larger touchscreen than originally scoped. |
+| Bus coprocessor | Raspberry Pi Pico (RP2040) | **Decided for now.** Pinout follows esphome-vistaECP's documented RP2040 mapping. Treated as the first of potentially several interface modules (see "Modularity" below) — not expected to need reworking for the ECP-only milestone; a different/second MCU is an acceptable future refactor if the Pico can't keep up once Polling Loop or zone-terminal I/O modules are added, but that's a "cross that bridge later" concern, not a current blocker. |
+| Display | **Undecided.** | Ruled out 12in (too tablet-scale for a Pi-driven build); ruled out reducing to a pocketable 3-5in. Still need to land on something in the 7-10.1in range pending how much needs to be on-screen at once (see `CONCEPT.md`). |
+| Battery | **LiPo pouch cell** | **Decided.** Single-cell, sized once display/runtime targets are set. |
+| Charge + power management | **USB-C charging circuit, with pass-through/overnight-charge support** | **Decided.** The device runs off battery in the field and stays on USB-C power (charging while running) for unattended overnight logging sessions — not powered from the panel's own AUX terminals. Needs a charge IC/board that supports simultaneous charge+discharge (e.g. TP4056-style boards do NOT reliably support this — look at USB-C PD trigger + a proper charge/power-path IC, or a PowerBoost-style board that explicitly supports it). Any needed voltage conversion (battery voltage to whatever the Pi 4 and Pico rails need) is part of this same subsystem. |
+| Bus interface (Pico <-> panel) | **Ground-isolated** (optocouplers, per esphome-vistaECP's isolated schematic) | **Decided.** Chosen specifically because the device has its own independent power source (battery + USB-C charger) that can be at a different ground potential than the panel — the exact case esphome-vistaECP's isolated variant exists for. Accepts the signal-fidelity tradeoff their README notes for this variant; may need extra care in firmware/hardware tuning as a result. |
+| Storage | **Industrial/endurance-rated microSD** | **Decided** — user has a good track record with these for continuous read/write workloads, covers the datalogging use case without needing an NVMe HAT. |
+| Panel connection | 4-conductor cable + small screw terminal or keypad-style connector | Matches how a real alpha keypad taps the bus (red/black/yellow/green: +12V, GND, data-in, data-out). |
+| Networking | Pi 4's built-in WiFi + Ethernet, software AP-mode fallback | See `CONCEPT.md` — WiFi client, WiFi hotspot (auto-fallback), and wired Ethernet all supported; no new hardware needed beyond what the Pi 4 already has. |
+| Enclosure | **User-designed, 3D-printed** | Out of scope for this doc — sized around whatever display/battery/board stack gets finalized. |
+
+## Modularity for future interface boards
+
+The long-term roadmap (`CONCEPT.md`) adds Polling Loop bus monitoring (Vista
+32/128/250 — a current-loop addressable-device protocol, electrically
+distinct from ECP) and raw zone-terminal I/O (simple voltage/resistance
+sensing, not a bus protocol at all). Neither is being built now — the
+near-term goal is an ECP read/write utility — but the physical/electrical
+design shouldn't paint itself into a corner: leave room (board space, a
+spare USB port or header) for an additional interface module later rather
+than assuming the ECP board is the only thing that will ever plug into the
+Pi. Not a current blocker; revisit when those modules become real.
 
 ## Data flow
 
 ```
 Vista panel keypad bus (4-wire ECP)
-        │  (resistor-divider / opto or transistor interface)
+        │  (isolated opto interface)
         ▼
-   RP2040 (Pico)  ── bit-bang ECP, emulate a virtual keypad address
+   RP2040 (Pico)  ── bit-bang ECP, emulate a virtual keypad address,
+        │            scan pulse-slot 3 for in-use keypad addresses
         │  USB serial, text protocol (firmware/SERIAL_PROTOCOL.md)
         ▼
-   Raspberry Pi  ── vista_tool Python backend (zone_discovery.py, safety rules)
-        │  WebSocket, localhost
-        ▼
-   Touchscreen (Chromium kiosk mode or similar, showing vista_tool's web UI)
+   Raspberry Pi 4 (8GB)  ── vista_tool Python backend, safety rules,
+        │                    industrial microSD for logging
+        │  WebSocket / HTTP, over WiFi (client or AP-mode hotspot) or Ethernet
+        ├──────────────► On-device touchscreen (local kiosk view)
+        └──────────────► Remote browser on a tech's laptop/phone (same UI,
+                          same live scan/log data, concurrent sessions OK)
 ```
 
-## Open items before committing to a build
+## Resolved items (previously open)
 
-1. **Confirm the Pico's virtual keypad address won't collide** with any
-   existing real keypad/module addresses on the target panel (`*190`–`*196`
-   assign partition keypad addresses — same caution esphome-vistaECP calls
-   out for its own AUI/keypad address selection).
+1. ~~Confirm the Pico's virtual keypad address won't collide with existing
+   keypads/modules~~ — resolved procedurally, not technically: this follows
+   standard technician SOP (identify the in-use address, disconnect the
+   field keypad, take its address), which the tool actively supports via
+   the address-sniffing onboarding flow in `CONCEPT.md`. Address changes
+   are live/hot on this bus with no special handling needed.
+2. ~~Decide isolation vs. non-isolation~~ — isolated, see BOM above.
+
+## Still open
+
+1. **Display size** (7-10.1in range) — pending UI density decision.
 2. **Bench-validate the RP2040 firmware against a real Vista-20P** using a
-   plain serial terminal before wiring in the Pi/UI/battery — isolates bus
-   timing bugs from application bugs, matching the "test methodology"
-   lesson in the protocol notes (a live end-to-end run catches things a
-   walk-through or a single capture won't).
-3. **Decide isolation vs. non-isolation** for the bus interface once you
-   know whether the handheld's ground will ever be at a different potential
-   than the panel's (e.g. if the handheld is also USB-charging from a
-   grounded outlet while clipped to the panel) — esphome-vistaECP's
-   ground-isolated variant exists specifically for that case, at some cost
-   to signal fidelity.
-4. **Battery runtime budget**: a full 64-zone dual walk (*56 + *82) takes
-   several minutes per the protocol notes' timing data — worth sizing the
-   battery against realistic day-of-use (multiple panels, idle UI time
-   between jobs), not just active-scan current draw.
+   plain serial terminal before wiring in the Pi/UI/battery/enclosure —
+   isolates bus timing bugs from application bugs, matching the "test
+   methodology" lesson in the protocol notes (a live end-to-end run catches
+   things a walk-through or a single capture won't). Next real milestone.
+3. **Battery runtime budget** — sizing depends on final display choice and
+   realistic day-of-use (multiple panels, idle time between jobs, possible
+   overnight logging on USB-C power rather than battery).
+4. **Concurrent-write safety at the protocol/firmware level** — the
+   product decision is "concurrent sessions are fine" (multiple viewers OK,
+   including while a scan/write is in progress), so this is about the
+   RP2040/backend correctly serializing actual keystroke sends to the panel
+   regardless of how many UI clients are connected, not about restricting
+   who can watch or click.
