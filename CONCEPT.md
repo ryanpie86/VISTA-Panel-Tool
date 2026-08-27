@@ -30,15 +30,20 @@ separate "logger mode" device, just the same tool used differently.
   get USB-serial access to custom hardware, which the user doesn't want;
   a fully custom 12in build was more hardware R&D than warranted once a
   Pi-based approach was back on the table.
-- Ground-isolated bus interface (the device has its own independent power
-  source, so isolation protects against ground-potential differences
-  between device and panel).
-- LiPo battery + USB-C charging circuit that supports charging while
-  running, for both portable use and overnight stationary logging.
+- Non-isolated ECP bus interface (shares ground with the panel, same as a
+  real physical keypad, for full signal fidelity) — isolation instead lives
+  on the power path (see below), which is where the actual ground-loop
+  risk from USB-C charging sits. Full reasoning in
+  HARDWARE_ARCHITECTURE.md's "Isolation strategy" section.
+- LiPo battery + USB-C charging circuit on an isolated DC-DC/charge path,
+  supporting charging while running, for both portable use and overnight
+  stationary logging.
 - Industrial/endurance-rated microSD for storage.
-- Display size still undecided (7-10.1in range) — see open threads.
-- Enclosure: user-designed and 3D-printed; not a software/electrical
-  concern for this doc.
+- 10.1in HDMI+USB-touch display, kiosk/kickstand form factor -- a small
+  device that sits upright at an angle at the panel, not a laptop-style
+  device held/carried while in use.
+- Enclosure: user-designed and 3D-printed, with a kickstand; not a
+  software/electrical concern for this doc.
 
 ## Networking
 
@@ -127,6 +132,21 @@ is meant to leave room for these as future add-on interface modules rather
 than being redesigned for them later (see HARDWARE_ARCHITECTURE.md
 "Modularity" section).
 
+**New: DC-voltage scope feature (decided).** A second hardware feature has
+been added to the roadmap — a DC-voltage oscilloscope-style measurement
+capability, using a dedicated Teensy 4.1 as a second coprocessor alongside
+the existing RP2040 (kept deliberately separate so the ECP bus's real-time
+timing stays fully isolated from the scope's USB/DMA activity; the RP2040
+itself is unchanged). The Teensy is a "dumb" sample pump only — an AD9280
+ADC into a ring buffer via FlexIO+DMA, streamed as framed raw sample blocks
+over USB serial — with all triggering, calibration, filtering, rendering,
+and datalogging done on the Pi 4 in the same FastAPI backend/UI as the ECP
+tooling. DC-voltage only for now (no AC/mains isolation front end). Full
+hardware detail in HARDWARE_ARCHITECTURE.md's "Scope/DC-measurement
+feature" section. Open question, not yet decided: whether this becomes the
+implementation of the zone-terminal I/O item above, or stays a separate
+general-purpose DC probe feature.
+
 ## Panel model roadmap
 
 1. **Vista-20P** — done (validated, per the original protocol notes).
@@ -144,15 +164,27 @@ than being redesigned for them later (see HARDWARE_ARCHITECTURE.md
 
 Carried forward from earlier discussion, still unresolved:
 
-1. **Display size** — somewhere in the 7-10.1in range; depends on how much
-   needs to be visible at once (simple form + zone list vs. side-by-side
-   views).
-2. **Bench-validate RP2040 firmware** against a real Vista-20P via serial
+1. **Bench-validate RP2040 firmware** against a real Vista-20P via serial
    terminal before wiring in the rest of the build.
-3. **Battery runtime budget** — depends on final display choice.
-4. **Write-mode keystroke sequences** — need to be worked out/documented
+2. **Battery runtime budget** — now unblocked on display choice (10.1in
+   HDMI+USB-touch); needs a realistic day-of-use estimate to size against.
+3. **Write-mode keystroke sequences** — need to be worked out/documented
    with the user's help (protocol knowledge the assistant doesn't have yet)
    before any write code gets written.
-5. **Concurrency at the firmware/backend level** — serializing real
+4. **Concurrency at the firmware/backend level** — serializing real
    keystroke sends when multiple UI clients are connected, now that
    concurrent viewing is confirmed to be fine at the product level.
+5. **Scope feature identity** — whether the new Teensy 4.1 DC-measurement
+   capability becomes the implementation of the zone-terminal I/O roadmap
+   item or stays a separate general-purpose DC probe feature.
+
+## Resolved since first written
+
+- **Display**: 10.1in HDMI+USB-touch, kiosk-style with a kickstand -- not
+  laptop-style. Settled after initially considering 12in (rejected as too
+  tablet-scale for a Pi build) and a pocketable 3-5in handheld (rejected
+  once the "robust utility tool, not a cheap/clunky gadget" framing was
+  clarified).
+- **Isolation strategy**: flipped from "isolate the bus" to "non-isolated
+  bus (best fidelity) + isolated power path (where the real ground-loop
+  risk actually lives)". See HARDWARE_ARCHITECTURE.md.
