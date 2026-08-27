@@ -1,0 +1,5 @@
+fastapi
+uvicorn[standard]
+pyserial-asyncio  # only needed once RP2040SerialTransport is used against real hardware
+pytest
+pytest-asyncio
