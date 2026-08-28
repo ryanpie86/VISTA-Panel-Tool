@@ -46,8 +46,10 @@ wired in — planned as the first real build/test milestone.
 | Compute | **Raspberry Pi 4, 8GB** | **Decided** — user has several on hand. Also settles wired Ethernet (built-in) and headroom for a larger touchscreen than originally scoped. |
 | Bus coprocessor | Raspberry Pi Pico (RP2040) | **Decided for now.** Pinout follows esphome-vistaECP's documented RP2040 mapping. Treated as the first of potentially several interface modules (see "Modularity" below) — not expected to need reworking for the ECP-only milestone; a different/second MCU is an acceptable future refactor if the Pico can't keep up once Polling Loop or zone-terminal I/O modules are added, but that's a "cross that bridge later" concern, not a current blocker. Stays exactly as-is for the new scope feature below — no changes, no re-validation needed; it owns nothing but ECP bus timing. |
 | Scope coprocessor | **Teensy 4.1** | **Decided.** Dedicated second coprocessor for the new DC-voltage oscilloscope-style measurement feature (see "Scope/DC-measurement feature" section below) — deliberately separate from the RP2040 rather than shared PIO on one chip, to keep ECP bus timing fully isolated from the scope feature's USB/DMA activity. Chosen over a second RP2040 specifically for native USB 2.0 High Speed (480Mbit/s) vs. the Pico's USB 1.1 Full Speed — headroom to raise ADC sample rate later without hitting a USB bottleneck. |
-| Scope ADC | **AD9280** (external ADC) | **Decided.** Fed via FlexIO+DMA into a ring buffer on the Teensy. |
-| Display | **10.1in HDMI + USB-touch panel** (1280x800 or 1920x1200) | **Decided.** Not laptop-style — a small stand-up kiosk device with a kickstand, set down at the panel and worked via touch (or left running and monitored remotely). HDMI+USB (not DSI) at this size for wider vendor selection and resolution headroom; costs two cables instead of one DSI ribbon, and somewhat more power draw, both acceptable tradeoffs for the resolution gained. |
+| Scope ADC | **AD9226** (12-bit, 65 MSPS, external ADC module) | **Decided (revised from AD9280).** Same parallel/FlexIO-friendly interface family as AD9280, but 12-bit resolution instead of 8-bit — meaningfully better precision for DC voltage measurement, plus more sample-rate headroom (65 MSPS vs. 32 MSPS). Sourced as a generic parallel-output breakout module (e.g. Yaregelun AD9226 FPGA module) rather than the bare chip; module's digital-output logic level (DRVDD) isn't documented by the reseller — see "Scope/DC-measurement feature" below and "Still open" item on verifying it. Fed via FlexIO+DMA into a ring buffer on the Teensy. |
+| Logic level shifters (ADC → Teensy) | **2x 74LVC245 (8-bit, unidirectional bus transceiver)** — e.g. [Adafruit #735](https://www.adafruit.com/product/735) or [SN74LVC245AN](https://digikey.com/product-detail/en/texas-instruments/SN74LVC245AN/296-8503-5-ND/377483) | **Decided.** Protects the Teensy 4.1's 3.3V-only, non-5V-tolerant GPIOs from the ADC module's digital outputs, whose logic level is unconfirmed. Two 8-bit chips cover the AD9226's 12 data bits + OTR (13 lines) with room to spare. Deliberately unidirectional rather than an auto-direction bidirectional shifter (e.g. TXB0108-based breakouts) — those use edge-sensing circuitry meant for slow bidirectional buses like I2C and degrade with several parallel bits switching simultaneously, a poor fit for a 12-bit ADC bus toggling every sample clock. Standard wiring: power the shifter chips from 3.3V and feed the ADC's outputs into the 5V-tolerant "A" side; propagation delay is negligible relative to the sample-rate headroom goal. |
+| Display | **GeeekPi 10.1in HDMI + USB-touch panel, 1280x800** | **Decided.** Not laptop-style — a small stand-up kiosk device with a kickstand, set down at the panel and worked via touch (or left running and monitored remotely). HDMI+USB (not DSI) at this size for wider vendor selection and resolution headroom; costs two cables instead of one DSI ribbon, and somewhat more power draw, both acceptable tradeoffs for the resolution gained. Single USB cable for touch input (not a hub — same connection pattern as the other shortlisted candidates), separate HDMI for video, separate external power adapter (not USB-bus-powered). |
+| USB hub (contingency) | **TBD — add only if needed** | **Deferred.** Pi 4 has 4 USB ports total; touchscreen (1) + RP2040 (1) + Teensy 4.1 scope (1) already consumes 3 of 4, leaving 1 spare for dev peripherals or future interface modules. A powered USB hub is the fix if that gets tight, but deliberately not pre-committed. Note for later: if a hub does get added, powering it from the device's own battery (rather than mains/USB-bus power) is an added complication worth avoiding if possible — plan around it rather than solve it now. |
 | Battery | **LiPo pouch pack, capacity undecided** | **Config decided, capacity open.** 1S2P (two cells in parallel, single nominal voltage — no balance leads needed, matches the original "single-cell" simplicity goal). Capacity pending enclosure dimensions (user is developing the case and will supply real size constraints). Sizing reference from the runtime discussion: ~6000mAh gets you right at a bare 2-hour floor on a *fresh* pack at an estimated 9-11W system draw (Pi 4 + 10.1in touchscreen + Pico + conversion losses) — that floor erodes below 2 hours as the pack ages (LiPo cells typically lose 20-30% capacity over their service life). Assistant's recommendation, not yet acted on: target a ~4hr fresh runtime (~11,000-13,000mAh) for real margin, since this is a kickstand/kiosk device that sits at the panel rather than being carried, making the size/weight cost of a bigger pack low. Final call waits on case dimensions. |
 | Charge + power management | **USB-C charging circuit, with pass-through/overnight-charge support, on an ISOLATED DC-DC/charge path** | **Decided (revised).** The device runs off battery in the field and stays on USB-C power (charging while running) for unattended overnight logging sessions — not powered from the panel's own AUX terminals. Needs a charge IC/board that supports simultaneous charge+discharge (TP4056-style boards do NOT reliably support this — look at USB-C PD trigger + a proper charge/power-path IC, or a PowerBoost-style board that explicitly supports it) AND provides galvanic isolation between the external USB-C input and the internal battery/Pi/Pico rails (e.g. an isolated DC-DC converter module on the charge path). This is where the ground-loop protection now lives — see "Isolation strategy" below. |
 | Bus interface (Pico <-> panel) | **Non-isolated** (resistor-divider + opto/transistor, per esphome-vistaECP's "simple version" schematic — their recommended default) | **Decided (revised from ground-isolated).** Shares ground directly with the panel, same as a real physical keypad's wiring (4-wire, no isolation, always has been how keypads connect). Chosen for full signal fidelity with zero compromise — esphome-vistaECP's own README calls this the best-signal, most-recommended option and calls the ground-isolated variant "least recommended" for signal quality. See "Isolation strategy" below for why this is safe given where isolation now lives instead. |
@@ -122,7 +124,7 @@ into it.
   USB link becoming the bottleneck.
 - **Division of labor — Teensy is a "dumb" sample pump only.** No
   trigger/filter logic runs on-device. The Teensy's job is exclusively:
-  external AD9280 ADC → FlexIO+DMA → ring buffer → framed raw sample blocks
+  external AD9226 ADC → FlexIO+DMA → ring buffer → framed raw sample blocks
   (sync + sequence number + samples) out over USB serial. All triggering,
   calibration, filtering, rendering, and datalogging happen on the Pi 4, in
   the same FastAPI backend/UI already serving the ECP tooling — not in a
@@ -131,10 +133,30 @@ into it.
   front end is a resistor-divider + buffer op-amp + input protection
   (series resistor + clamp/TVS) — sized for safe DC probing, not for
   touching mains or other AC sources.
-- **Open question:** whether this becomes the implementation of the
-  already-planned "zone-terminal I/O" roadmap item (see "Modularity" above
-  and `CONCEPT.md`'s roadmap), or stays a separate general-purpose DC probe
-  feature. Not yet decided — revisit once the scope hardware is bench-tested.
+- **Probe connector: BNC.** The ADC modules available for this project are
+  SMA-native, but off-the-shelf DC/scope probes are essentially all BNC —
+  SMA probes aren't readily available. Decided to keep BNC as the probe
+  interface (standard, widely available probes) and adapt via SMA-to-BNC
+  adapters at the ADC module rather than chase down nonstandard SMA probes.
+- **ADC-to-Teensy logic level shifting.** The sourced AD9226 module is a
+  generic parallel-output FPGA breakout board; its digital output voltage
+  (DRVDD) isn't documented by the reseller, and the Teensy 4.1's GPIOs are
+  3.3V-only (not 5V-tolerant) — so a pair of 74LVC245 unidirectional
+  level-shifter chips sits between the ADC module and the Teensy
+  unconditionally, as cheap insurance regardless of what the module turns
+  out to output. See the BOM row above for parts and the reasoning against
+  auto-direction bidirectional shifters (e.g. TXB0108) for this use case.
+- **Open question (conditionally resolved):** whether this becomes the
+  implementation of the already-planned "zone-terminal I/O" roadmap item
+  (see "Modularity" above and `CONCEPT.md`'s roadmap), or stays a separate
+  general-purpose DC probe feature. Decision criteria set: **yes, this
+  becomes the zone-terminal I/O implementation, conditional on the scope
+  hardware being able to serve double duty as zone-terminal I/O sensing
+  while also being usable as a general-purpose scope** (i.e., the two uses
+  aren't mutually exclusive on the same front end/channel). If that turns
+  out not to be feasible once the scope hardware is bench-tested, dedicated
+  zone-terminal I/O will need its own hardware, to be figured out later.
+  Not blocking — revisit once the scope hardware is working.
 
 ## Data flow
 
@@ -144,15 +166,21 @@ Vista panel keypad bus (4-wire ECP)          DC voltage probe (front end:
         │   + opto/transistor interface,       op-amp + input protection)
         │   shares ground with panel —                 │
         │   same as a real keypad)                      ▼
-        ▼                                        AD9280 (external ADC)
-   RP2040 (Pico)  ── bit-bang ECP,                       │
-        │            emulate a virtual                  ▼
-        │            keypad address, scan        Teensy 4.1  ── FlexIO+DMA into
-        │            pulse-slot 3 for in-use          │         ring buffer;
-        │            keypad addresses                  │         "dumb" sample
-        │  USB serial, text protocol                    │         pump only —
-        │  (firmware/SERIAL_PROTOCOL.md)                │         no trigger/filter
-        │                                                │         logic on-device
+        ▼                                        AD9226 (external ADC,
+   RP2040 (Pico)  ── bit-bang ECP,                        12-bit, 65 MSPS)
+        │            emulate a virtual                    │
+        │            keypad address, scan                 ▼
+        │            pulse-slot 3 for in-use     2x 74LVC245 level shifters
+        │            keypad addresses             (ADC logic level → 3.3V,
+        │  USB serial, text protocol               protects Teensy GPIOs)
+        │  (firmware/SERIAL_PROTOCOL.md)                   │
+        │                                                  ▼
+        │                                        Teensy 4.1  ── FlexIO+DMA into
+        │                                            │         ring buffer;
+        │                                            │         "dumb" sample
+        │                                            │         pump only —
+        │                                            │         no trigger/filter
+        │                                            │         logic on-device
         │                                       │  USB serial (High Speed),
         │                                       │  framed raw sample blocks
         │                                       │  (sync + sequence number +
@@ -183,6 +211,10 @@ Vista panel keypad bus (4-wire ECP)          DC voltage probe (front end:
    strategy" section above for the reasoning.
 3. ~~Display size~~ — 10.1in HDMI+USB-touch, kiosk/kickstand form factor, see
    BOM above.
+4. ~~Display model~~ — GeeekPi 10.1in 1280x800, see BOM above. USB port
+   budget checked: touch + RP2040 + Teensy scope use 3 of the Pi 4's 4 USB
+   ports; a powered hub is the deferred contingency if a 4th (or more) is
+   needed, not pre-committed.
 
 ## Still open
 
@@ -191,11 +223,14 @@ Vista panel keypad bus (4-wire ECP)          DC voltage probe (front end:
    isolates bus timing bugs from application bugs, matching the "test
    methodology" lesson in the protocol notes (a live end-to-end run catches
    things a walk-through or a single capture won't). Next real milestone.
-2. **Battery capacity** — deliberately left undecided. Config (1S2P) is
-   settled; final mAh waits on real enclosure dimensions once the
-   user's case design is further along. Minimum requirement: 2 hours
-   (average service call duration) on battery alone. See BOM row above for
-   the runtime math and the assistant's margin recommendation.
+2. **Battery capacity** — deliberately left undecided, and **not needed
+   during the development/testing phase** — the build will run on isolated
+   wall power (via the isolated USB-C/DC-DC charge path already in the
+   BOM) until hardware is confirmed working. Config (1S2P) is settled;
+   final mAh waits on real enclosure dimensions once the user's case design
+   is further along. Minimum requirement once it matters: 2 hours (average
+   service call duration) on battery alone. See BOM row above for the
+   runtime math and the assistant's margin recommendation.
 3. **Concurrent-write safety at the protocol/firmware level** — the
    product decision is "concurrent sessions are fine" (multiple viewers OK,
    including while a scan/write is in progress), so this is about the
@@ -210,3 +245,10 @@ Vista panel keypad bus (4-wire ECP)          DC voltage probe (front end:
    number/sample framing over USB serial (mirrors the RP2040's
    `firmware/SERIAL_PROTOCOL.md` role, but not yet written up as its own
    spec doc).
+6. **Verify the sourced AD9226 module's actual DRVDD/output logic level**
+   once hardware is in hand (datasheet check or multimeter on the output
+   pins before connecting live) — the reseller listing doesn't document it.
+   The 74LVC245 level shifters in the BOM are wired in regardless as
+   insurance, so this doesn't block assembly, but worth confirming for the
+   record (and in case the module turns out to already be 3.3V, making the
+   shifters technically redundant but still harmless to leave in).
