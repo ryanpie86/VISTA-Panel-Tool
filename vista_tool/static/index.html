@@ -25,6 +25,7 @@
   .tool-card .sub { display: block; font-weight: 400; font-size: 13px; color: #9aa0a8; margin-top: 4px; }
   .tool-card:disabled { opacity: 0.4; }
   .form-row { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+  .next-row { display: flex; justify-content: flex-end; margin-top: 20px; }
   input[type=text], input[type=password], select {
     background: #1c1f26; border: 1px solid #2a2e37; color: #e8eaed;
     padding: 12px 14px; border-radius: 8px; font-size: 16px; flex: 1; min-width: 140px;
@@ -55,10 +56,30 @@
 <main>
 
   <div id="homeScreen" class="screen">
+    <div class="form-row">
+      <select id="panelType">
+        <option value="20P">Vista-20P</option>
+        <option value="21IP">Vista-21IP (built-in radio, programs identically)</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <input id="installerCode" type="password" placeholder="Installer code" inputmode="numeric" oninput="updateNextEnabled()">
+      <button id="backdoorBtn" type="button" onclick="useBackdoorCode()">I don't know / attempt back door</button>
+    </div>
+    <div class="next-row">
+      <button id="nextBtn" onclick="showScreen('toolsScreen')" disabled>Next &rarr;</button>
+    </div>
+  </div>
+
+  <div id="toolsScreen" class="screen hidden">
+    <div class="screen-header">
+      <button class="ghost" type="button" onclick="showScreen('homeScreen')">&larr; Back</button>
+      <h2>Tools</h2>
+    </div>
     <div class="tool-grid">
       <button class="tool-card" onclick="showScreen('scanScreen')">
         Zone Discovery
-        <span class="sub">Read zone types &amp; names (*56 / *82)</span>
+        <span class="sub">Read zone types &amp; names</span>
       </button>
       <button class="tool-card" disabled>
         Write Configuration
@@ -73,22 +94,12 @@
 
   <div id="scanScreen" class="screen hidden">
     <div class="screen-header">
-      <button class="ghost" type="button" onclick="goHome()">&larr; Back</button>
+      <button class="ghost" type="button" onclick="goToTools()">&larr; Back</button>
       <h2>Zone Discovery</h2>
     </div>
     <div class="form-row">
-      <select id="panelType">
-        <option value="20P">Vista-20P</option>
-        <option value="21IP">Vista-21IP (built-in radio, programs identically)</option>
-      </select>
-    </div>
-    <div class="form-row">
-      <input id="installerCode" type="password" placeholder="Installer code" inputmode="numeric">
-      <button id="backdoorBtn" type="button" onclick="useBackdoorCode()">I don't know / attempt back door</button>
-    </div>
-    <div class="form-row">
-      <label><input id="readTypes" type="checkbox" checked> Zone types (*56)</label>
-      <label><input id="readNames" type="checkbox"> Zone names (*82, re-saves)</label>
+      <label><input id="readTypes" type="checkbox" checked> Zone types</label>
+      <label><input id="readNames" type="checkbox"> Zone names (re-saves each one)</label>
     </div>
     <div class="form-row">
       <button id="startBtn" onclick="startScan()">Start Scan</button>
@@ -117,9 +128,13 @@ function showScreen(id) {
   document.getElementById(id).classList.remove('hidden');
 }
 
-function goHome() {
+function goToTools() {
   if (ws) stopScan();
-  showScreen('homeScreen');
+  showScreen('toolsScreen');
+}
+
+function updateNextEnabled() {
+  document.getElementById('nextBtn').disabled = !document.getElementById('installerCode').value.trim();
 }
 
 // Ademco/Honeywell Vista installer default code -- programs identically on
@@ -129,6 +144,7 @@ const BACKDOOR_INSTALLER_CODE = '4112';
 
 function useBackdoorCode() {
   document.getElementById('installerCode').value = BACKDOOR_INSTALLER_CODE;
+  updateNextEnabled();
 }
 
 function row(zone) {
