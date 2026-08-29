@@ -110,18 +110,18 @@ walk end-to-end, ported from the original Home Assistant integration, with
 its safety rules intact (see `VISTA_ZONE_DISCOVERY_PROTOCOL_NOTES.md`).
 
 **Write is deferred — an add-on feature, not near-term work.** The
-priority order is: get the new hardware (RP2040 + Teensy 4.1 scope) built
-and confirmed operating, and get ECP *reading* working end-to-end on that
-hardware, before write-mode is touched at all. Write is still understood
-as the eventual mirror-image operation — navigating to the same
-menus/fields but entering new values instead of just reading, with a
-symmetric verify pattern (re-read after any write using the existing read
-mechanism, rather than trusting the write blind) — but none of that starts
-until hardware bring-up and read-mode are solid. The exact keystroke
-sequences for entering edit mode and committing new values still need to
-be documented when the time comes — this is real new protocol knowledge,
-not something already captured in the existing notes, and will need the
-same real-hardware care the original read-side work required (see the "six
+priority order is: get the hardware (RP2040) built and confirmed
+operating, and get ECP *reading* working end-to-end on that hardware,
+before write-mode is touched at all. Write is still understood as the
+eventual mirror-image operation — navigating to the same menus/fields but
+entering new values instead of just reading, with a symmetric verify
+pattern (re-read after any write using the existing read mechanism, rather
+than trusting the write blind) — but none of that starts until hardware
+bring-up and read-mode are solid. The exact keystroke sequences for
+entering edit mode and committing new values still need to be documented
+when the time comes — this is real new protocol knowledge, not something
+already captured in the existing notes, and will need the same
+real-hardware care the original read-side work required (see the "six
 real-hardware corrections" in the protocol notes as a cautionary example of
 how easy this is to get subtly wrong).
 
@@ -133,25 +133,6 @@ explicitly deferred until the ECP read/write utility is solid; the hardware
 is meant to leave room for these as future add-on interface modules rather
 than being redesigned for them later (see HARDWARE_ARCHITECTURE.md
 "Modularity" section).
-
-**New: DC-voltage scope feature (decided).** A second hardware feature has
-been added to the roadmap — a DC-voltage oscilloscope-style measurement
-capability, using a dedicated Teensy 4.1 as a second coprocessor alongside
-the existing RP2040 (kept deliberately separate so the ECP bus's real-time
-timing stays fully isolated from the scope's USB/DMA activity; the RP2040
-itself is unchanged). The Teensy is a "dumb" sample pump only — an AD9226
-ADC (12-bit, 65 MSPS) into a ring buffer via FlexIO+DMA, streamed as framed
-raw sample blocks over USB serial — with all triggering, calibration,
-filtering, rendering, and datalogging done on the Pi 4 in the same FastAPI
-backend/UI as the ECP tooling. DC-voltage only for now (no AC/mains
-isolation front end); probe connector is BNC (standard scope probes),
-adapted from the SMA-native ADC module via SMA-to-BNC adapters. Full
-hardware detail in HARDWARE_ARCHITECTURE.md's "Scope/DC-measurement
-feature" section. Zone-terminal I/O question conditionally resolved: this
-becomes that roadmap item's implementation *if* the scope hardware can
-serve double duty as zone-terminal I/O sensing while also usable as a
-general-purpose scope; if not feasible once bench-tested, zone-terminal
-I/O gets its own dedicated hardware later.
 
 ## Panel model roadmap
 
@@ -176,18 +157,14 @@ Carried forward from earlier discussion, still unresolved:
    development/testing phase, which runs on isolated wall power. Revisit
    once hardware bring-up is done and case dimensions are set.
 3. **Write-mode keystroke sequences** — deferred as an add-on feature
-   until the new hardware (RP2040 + Teensy scope) is confirmed working and
-   ECP read-mode is solid on it. Will need to be worked out/documented
-   with the user's help (protocol knowledge the assistant doesn't have yet)
-   when that time comes.
+   until the new hardware (RP2040) is confirmed working and ECP read-mode
+   is solid on it. Will need to be worked out/documented with the user's
+   help (protocol knowledge the assistant doesn't have yet) when that time
+   comes.
 4. **Concurrency at the firmware/backend level** — serializing real
    keystroke sends when multiple UI clients are connected, now that
    concurrent viewing is confirmed to be fine at the product level.
-5. **Scope feature identity** — conditionally resolved (see "Software
-   scope: read/write" above): becomes the zone-terminal I/O
-   implementation if the same scope hardware can do both jobs; otherwise
-   zone-terminal I/O gets separate hardware later.
-6. **RP2040 / ECP interface pin mapping** — esphome-vistaECP's reference
+5. **RP2040 / ECP interface pin mapping** — esphome-vistaECP's reference
    schematics only document ESP8266/ESP32 pin assignments, not RP2040.
    Deliberately not being worked out yet — hardware isn't in hand. Will be
    done pin-by-pin once the RP2040 and interface components are physically

@@ -8,20 +8,12 @@ a handheld: a Raspberry Pi driving a touchscreen web UI, paired with an
 RP2040 coprocessor that clips directly onto the panel's keypad bus — no
 Envisalink module required in the field.
 
-The handheld is also gaining a second, independent hardware feature: a
-DC-voltage oscilloscope-style measurement capability, using a dedicated
-Teensy 4.1 coprocessor (kept separate from the RP2040 so ECP bus timing
-stays fully isolated from the scope's USB/DMA activity). This is a
-hardware-planning-stage feature right now — no firmware/software work has
-started on it yet.
-
 See `CONCEPT.md` (project doc) for the full product concept, roadmap, and
 decision history; `HARDWARE_ARCHITECTURE.md` (also saved to the project)
-for the handheld BOM and wiring plan, covering both the ECP bus interface
-and the scope feature; and `firmware/SERIAL_PROTOCOL.md` for the
-Pi<->RP2040 contract. `VISTA_ZONE_DISCOVERY_PROTOCOL_NOTES.md` (project
-doc) is the source-of-truth for the panel protocol itself — this repo is
-that document turned into runnable, transport-agnostic code.
+for the handheld BOM and wiring plan; and `firmware/SERIAL_PROTOCOL.md`
+for the Pi<->RP2040 contract. `VISTA_ZONE_DISCOVERY_PROTOCOL_NOTES.md`
+(project doc) is the source-of-truth for the panel protocol itself — this
+repo is that document turned into runnable, transport-agnostic code.
 
 ## Status
 
@@ -68,8 +60,8 @@ python3 -m pytest tests/ -v
 ## Next steps
 
 Priority order (per `CONCEPT.md`): get the hardware built and ECP *reading*
-solid before anything else. Write-mode and the scope feature are explicitly
-deferred add-ons, not near-term work.
+solid before anything else. Write-mode is an explicitly deferred add-on,
+not near-term work.
 
 1. Build/flash the RP2040 firmware (port esphome-vistaECP's ECP class out
    of ESPHome, per its own README's note that the library works standalone;
@@ -81,7 +73,3 @@ deferred add-ons, not near-term work.
 3. **Write-mode is deferred** until the above is confirmed working — treat
    it as an add-on feature, not next-up work. Needs real keystroke-sequence
    protocol knowledge to be documented first (see `CONCEPT.md`).
-4. **Scope feature (Teensy 4.1 + AD9226)** — separate hardware track, not
-   yet started in firmware/software. Bench-test once parts are in hand; see
-   `HARDWARE_ARCHITECTURE.md`'s "Scope/DC-measurement feature" section for
-   the current hardware plan and open items.
