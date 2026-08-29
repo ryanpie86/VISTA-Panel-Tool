@@ -20,10 +20,11 @@ import os
 from dataclasses import asdict
 from pathlib import Path
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import Body, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from . import site_store
 from .transports.tpi import EnvisalinkTPITransport
 from .zone_discovery import ScanProgress, ZoneDiscoveryWalk, ZoneResult
 
@@ -54,6 +55,28 @@ def build_transport():
 @app.get("/")
 async def index():
     return FileResponse(STATIC_DIR / "index.html")
+
+
+@app.get("/api/sites")
+async def api_list_sites():
+    return site_store.list_sites()
+
+
+@app.get("/api/sites/{name}")
+async def api_get_site(name: str):
+    site = site_store.get_site(name)
+    if site is None:
+        raise HTTPException(status_code=404, detail="Site not found")
+    return {"name": name, **site}
+
+
+@app.put("/api/sites/{name}")
+async def api_save_site(name: str, payload: dict = Body(...)):
+    try:
+        site_store.save_site(name, payload.get("panel_type", ""), payload.get("zones", []))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"name": name}
 
 
 @app.websocket("/ws/scan")

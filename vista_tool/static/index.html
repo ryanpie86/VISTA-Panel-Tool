@@ -24,6 +24,7 @@
   }
   .tool-card .sub { display: block; font-weight: 400; font-size: 13px; color: #9aa0a8; margin-top: 4px; }
   .tool-card:disabled { opacity: 0.4; }
+  #homeScreen .tool-card { margin-bottom: 20px; }
   .form-row { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
   .next-row { display: flex; justify-content: flex-end; margin-top: 20px; }
   input[type=text], input[type=password], select {
@@ -47,7 +48,7 @@
   table { width: 100%; border-collapse: collapse; font-size: 15px; }
   th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #2a2e37; }
   th { color: #9aa0a8; font-weight: 500; font-size: 13px; text-transform: uppercase; }
-  #status { color: #9aa0a8; font-size: 14px; margin-bottom: 8px; min-height: 20px; }
+  #status, #toolsStatus, #siteListStatus { color: #9aa0a8; font-size: 14px; margin-bottom: 8px; min-height: 20px; }
   .error { color: #ff6b6b; }
 </style>
 </head>
@@ -56,6 +57,10 @@
 <main>
 
   <div id="homeScreen" class="screen">
+    <button class="tool-card" onclick="openLoadSite()">
+      Load previous site
+      <span class="sub">Pick up a site's saved data from a past visit</span>
+    </button>
     <div class="form-row">
       <select id="panelType">
         <option value="20P">Vista-20P</option>
@@ -71,11 +76,25 @@
     </div>
   </div>
 
+  <div id="loadSiteScreen" class="screen hidden">
+    <div class="screen-header">
+      <button class="ghost" type="button" onclick="showScreen('homeScreen')">&larr; Back</button>
+      <h2>Load Previous Site</h2>
+    </div>
+    <div id="siteListStatus"></div>
+    <div id="siteList" class="tool-grid"></div>
+  </div>
+
   <div id="toolsScreen" class="screen hidden">
     <div class="screen-header">
       <button class="ghost" type="button" onclick="showScreen('homeScreen')">&larr; Back</button>
       <h2>Tools</h2>
     </div>
+    <div class="form-row">
+      <button id="saveSiteBtn" class="save" onclick="saveSite()">Save Site</button>
+      <input id="siteNameInput" type="text" placeholder="Site name">
+    </div>
+    <div id="toolsStatus"></div>
     <div class="tool-grid">
       <button class="tool-card" onclick="showScreen('scanScreen')">
         Zone Discovery
@@ -117,10 +136,14 @@
 </main>
 <script>
 let ws = null;
-// Scan results collected as they stream in, keyed by zone number. This is
-// the seam between "read" and the two things reading is actually for:
-// loading back into a future write-mode editor, or exporting as a report
-// (see saveScan() below and CONCEPT.md "Software scope: read/write").
+// Which saved site (if any) the current data came from/should update. Blank
+// means "new site, not saved under a name yet".
+let currentSiteName = '';
+// Scan results collected as they stream in (or loaded from a saved site),
+// keyed by zone number. This is the seam between "read" and the things
+// reading is actually for: loading back into a future write-mode editor,
+// exporting as a report, or persisting under a site name for next visit
+// (see saveScan()/saveSite() below and CONCEPT.md "Software scope: read/write").
 const results = {};
 
 function showScreen(id) {
@@ -147,6 +170,17 @@ function useBackdoorCode() {
   updateNextEnabled();
 }
 
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+}
+
+function clearResults() {
+  document.getElementById('results').innerHTML = '';
+  for (const zone of Object.keys(results)) delete results[zone];
+}
+
 function row(zone) {
   let tr = document.getElementById('row-' + zone);
   if (!tr) {
@@ -161,8 +195,7 @@ function row(zone) {
 function startScan() {
   const code = document.getElementById('installerCode').value.trim();
   if (!code) { setStatus('Enter the installer code first.', true); return; }
-  document.getElementById('results').innerHTML = '';
-  for (const zone of Object.keys(results)) delete results[zone];
+  clearResults();
   document.getElementById('startBtn').disabled = true;
   document.getElementById('stopBtn').disabled = false;
   document.getElementById('saveBtn').disabled = true;
@@ -241,6 +274,101 @@ function saveScan() {
   a.remove();
   URL.revokeObjectURL(a.href);
   setStatus('Saved scan to CSV.');
+}
+
+function setToolsStatus(msg, isError) {
+  const el = document.getElementById('toolsStatus');
+  el.textContent = msg;
+  el.className = isError ? 'error' : '';
+}
+
+// Persists the current results (whatever's been read so far, or loaded from
+// a previous visit) to the backend under a site name, so "Load previous
+// site" can bring it back later.
+async function saveSite() {
+  const name = document.getElementById('siteNameInput').value.trim();
+  if (!name) { setToolsStatus('Enter a site name first.', true); return; }
+
+  const panelType = document.getElementById('panelType').value;
+  const zones = Object.values(results);
+  try {
+    const resp = await fetch(`/api/sites/${encodeURIComponent(name)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ panel_type: panelType, zones }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    currentSiteName = name;
+    setToolsStatus(`Saved "${name}".`);
+  } catch (err) {
+    setToolsStatus('Could not save site.', true);
+  }
+}
+
+function setSiteListStatus(msg, isError) {
+  const el = document.getElementById('siteListStatus');
+  el.textContent = msg;
+  el.className = isError ? 'error' : '';
+}
+
+async function openLoadSite() {
+  showScreen('loadSiteScreen');
+  const listEl = document.getElementById('siteList');
+  listEl.innerHTML = '';
+  setSiteListStatus('Loading…');
+
+  let sites;
+  try {
+    const resp = await fetch('/api/sites');
+    sites = await resp.json();
+  } catch (err) {
+    setSiteListStatus('Could not load saved sites.', true);
+    return;
+  }
+
+  if (!sites.length) { setSiteListStatus('No saved sites yet.'); return; }
+  setSiteListStatus('');
+  for (const site of sites) {
+    const btn = document.createElement('button');
+    btn.className = 'tool-card';
+    const saved = new Date(site.saved_at).toLocaleString();
+    const zoneWord = site.zone_count === 1 ? 'zone' : 'zones';
+    btn.innerHTML = `${escapeHtml(site.name)}` +
+      `<span class="sub">${escapeHtml(site.panel_type)} — ${site.zone_count} ${zoneWord} — saved ${escapeHtml(saved)}</span>`;
+    btn.onclick = () => loadSite(site.name);
+    listEl.appendChild(btn);
+  }
+}
+
+// Selecting a saved site loads its last-saved scan data straight into the
+// Zone Discovery table (skipping installer-code entry -- this is reviewing
+// already-read data, not talking to a live panel) and drops the tech at
+// the Tools menu.
+async function loadSite(name) {
+  let site;
+  try {
+    const resp = await fetch(`/api/sites/${encodeURIComponent(name)}`);
+    if (!resp.ok) throw new Error('not found');
+    site = await resp.json();
+  } catch (err) {
+    setSiteListStatus('Could not load that site.', true);
+    return;
+  }
+
+  document.getElementById('panelType').value = site.panel_type;
+  clearResults();
+  for (const zone of site.zones) {
+    results[zone.zone] = zone;
+    const tr = row(zone.zone);
+    if (zone.zone_type_label) tr.querySelector('.type').textContent = zone.zone_type_label;
+    if (zone.name) tr.querySelector('.name').textContent = zone.name;
+  }
+  document.getElementById('saveBtn').disabled = site.zones.length === 0;
+
+  currentSiteName = name;
+  document.getElementById('siteNameInput').value = name;
+  setToolsStatus(`Loaded "${name}".`);
+  showScreen('toolsScreen');
 }
 </script>
 </body>
