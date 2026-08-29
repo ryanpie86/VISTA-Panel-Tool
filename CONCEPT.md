@@ -125,6 +125,28 @@ real-hardware care the original read-side work required (see the "six
 real-hardware corrections" in the protocol notes as a cautionary example of
 how easy this is to get subtly wrong).
 
+**Reading is not an end in itself — it exists to feed two downstream uses,
+both committed scope:**
+
+1. **Edit and write back** — the write-mode work described above: load a
+   saved scan, let the tech change zone types/names, push the changes to
+   the panel, verify by re-reading.
+2. **Report generation (CSV/PDF)** — export a saved scan as a
+   technician-facing report, independent of write-mode. A tech may only
+   ever want documentation of what a panel is currently programmed with,
+   never touching write-mode at all.
+
+Neither downstream use is fully built yet (report rendering — CSV to start,
+PDF later — is itself deferred, same as write-mode), but the UI already
+treats a completed scan as a saved artifact rather than a one-shot display:
+the web UI's "Save" action on the zone-discovery screen exports the scan to
+CSV today, which doubles as both a first-cut report and the natural input
+format for the write-mode editor once it exists. The UI is structured as a
+home screen with multiple tool entries (Zone Discovery today; Write
+Configuration and Reports as visible but not-yet-built placeholders) rather
+than a single-purpose scanning page, since this tool's mandate has always
+been broader than zone discovery alone.
+
 Once read/write is solid for ECP, the roadmap continues into general I/O
 (zone terminal voltage/resistance sensing — not a bus protocol) and Polling
 Loop bus support (Vista 32/128/250 commercial panels — a current-loop
@@ -169,6 +191,11 @@ Carried forward from earlier discussion, still unresolved:
    Deliberately not being worked out yet — hardware isn't in hand. Will be
    done pin-by-pin once the RP2040 and interface components are physically
    available.
+6. **PDF report export** — CSV export from a saved scan exists; PDF is the
+   deferred half of the "Reports" tool entry.
+7. **Reload a saved scan into a write-mode editor** — depends on write-mode
+   existing at all (see item 3); the CSV `Save` output is meant to be that
+   editor's eventual input format.
 
 ## Resolved since first written
 

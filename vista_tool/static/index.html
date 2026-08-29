@@ -14,6 +14,16 @@
   header { padding: 16px 20px; background: #1c1f26; border-bottom: 1px solid #2a2e37; }
   h1 { font-size: 18px; margin: 0; }
   main { flex: 1; overflow-y: auto; padding: 16px 20px; }
+  .screen.hidden { display: none; }
+  .screen-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .screen-header h2 { margin: 0; font-size: 16px; }
+  .tool-grid { display: flex; flex-direction: column; gap: 12px; }
+  .tool-card {
+    display: block; width: 100%; text-align: left; background: #1c1f26; border: 1px solid #2a2e37;
+    border-radius: 10px; padding: 18px; color: #e8eaed; font-size: 16px; font-weight: 600; min-height: 0;
+  }
+  .tool-card .sub { display: block; font-weight: 400; font-size: 13px; color: #9aa0a8; margin-top: 4px; }
+  .tool-card:disabled { opacity: 0.4; }
   .form-row { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
   input[type=text], input[type=password], select {
     background: #1c1f26; border: 1px solid #2a2e37; color: #e8eaed;
@@ -26,6 +36,11 @@
   }
   button:disabled { opacity: 0.5; }
   button.stop { background: #d5453a; }
+  button.save { background: #2f9e58; }
+  button.ghost {
+    background: transparent; border: 1px solid #2a2e37; color: #9aa0a8;
+    padding: 10px 14px; font-size: 14px; font-weight: 500; min-height: 40px;
+  }
   #progressbar { height: 8px; background: #2a2e37; border-radius: 4px; overflow: hidden; margin: 14px 0; }
   #progressbar > div { height: 100%; background: #3a7bd5; width: 0%; transition: width 0.2s; }
   table { width: 100%; border-collapse: collapse; font-size: 15px; }
@@ -36,36 +51,76 @@
 </style>
 </head>
 <body>
-<header><h1>Vista Panel Tool — Zone Discovery</h1></header>
+<header><h1>Vista Panel Tool</h1></header>
 <main>
-  <div class="form-row">
-    <select id="panelType">
-      <option value="20P">Vista-20P</option>
-      <option value="21IP">Vista-21IP (built-in radio, programs identically)</option>
-    </select>
+
+  <div id="homeScreen" class="screen">
+    <div class="tool-grid">
+      <button class="tool-card" onclick="showScreen('scanScreen')">
+        Zone Discovery
+        <span class="sub">Read zone types &amp; names (*56 / *82)</span>
+      </button>
+      <button class="tool-card" disabled>
+        Write Configuration
+        <span class="sub">Coming soon — edit a saved scan and send it back to the panel</span>
+      </button>
+      <button class="tool-card" disabled>
+        Reports
+        <span class="sub">Coming soon — turn a saved scan into a CSV/PDF report</span>
+      </button>
+    </div>
   </div>
-  <div class="form-row">
-    <input id="installerCode" type="password" placeholder="Installer code" inputmode="numeric">
-    <button id="backdoorBtn" type="button" onclick="useBackdoorCode()">I don't know / attempt back door</button>
+
+  <div id="scanScreen" class="screen hidden">
+    <div class="screen-header">
+      <button class="ghost" type="button" onclick="goHome()">&larr; Back</button>
+      <h2>Zone Discovery</h2>
+    </div>
+    <div class="form-row">
+      <select id="panelType">
+        <option value="20P">Vista-20P</option>
+        <option value="21IP">Vista-21IP (built-in radio, programs identically)</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <input id="installerCode" type="password" placeholder="Installer code" inputmode="numeric">
+      <button id="backdoorBtn" type="button" onclick="useBackdoorCode()">I don't know / attempt back door</button>
+    </div>
+    <div class="form-row">
+      <label><input id="readTypes" type="checkbox" checked> Zone types (*56)</label>
+      <label><input id="readNames" type="checkbox"> Zone names (*82, re-saves)</label>
+    </div>
+    <div class="form-row">
+      <button id="startBtn" onclick="startScan()">Start Scan</button>
+      <button id="stopBtn" class="stop" onclick="stopScan()" disabled>Stop</button>
+      <button id="saveBtn" class="save" onclick="saveScan()" disabled>Save</button>
+    </div>
+    <div id="status"></div>
+    <div id="progressbar"><div id="progressfill"></div></div>
+    <table>
+      <thead><tr><th>Zone</th><th>Type</th><th>Name</th></tr></thead>
+      <tbody id="results"></tbody>
+    </table>
   </div>
-  <div class="form-row">
-    <label><input id="readTypes" type="checkbox" checked> Zone types (*56)</label>
-    <label><input id="readNames" type="checkbox"> Zone names (*82, re-saves)</label>
-  </div>
-  <div class="form-row">
-    <button id="startBtn" onclick="startScan()">Start Scan</button>
-    <button id="stopBtn" class="stop" onclick="stopScan()" disabled>Stop</button>
-  </div>
-  <div id="status"></div>
-  <div id="progressbar"><div id="progressfill"></div></div>
-  <table>
-    <thead><tr><th>Zone</th><th>Type</th><th>Name</th></tr></thead>
-    <tbody id="results"></tbody>
-  </table>
+
 </main>
 <script>
 let ws = null;
+// Scan results collected as they stream in, keyed by zone number. This is
+// the seam between "read" and the two things reading is actually for:
+// loading back into a future write-mode editor, or exporting as a report
+// (see saveScan() below and CONCEPT.md "Software scope: read/write").
 const results = {};
+
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach((el) => el.classList.add('hidden'));
+  document.getElementById(id).classList.remove('hidden');
+}
+
+function goHome() {
+  if (ws) stopScan();
+  showScreen('homeScreen');
+}
 
 // Ademco/Honeywell Vista installer default code -- programs identically on
 // 20P and 21IP (21IP just adds a built-in radio). For techs who don't have
@@ -91,8 +146,10 @@ function startScan() {
   const code = document.getElementById('installerCode').value.trim();
   if (!code) { setStatus('Enter the installer code first.', true); return; }
   document.getElementById('results').innerHTML = '';
+  for (const zone of Object.keys(results)) delete results[zone];
   document.getElementById('startBtn').disabled = true;
   document.getElementById('stopBtn').disabled = false;
+  document.getElementById('saveBtn').disabled = true;
   setStatus('Connecting…');
 
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
@@ -115,6 +172,8 @@ function startScan() {
       document.getElementById('progressfill').style.width = pct + '%';
       setStatus(`Reading zone ${msg.zone} of ${msg.total_zones} (${msg.stage})…`);
     } else if (msg.kind === 'zone') {
+      results[msg.zone] = msg;
+      document.getElementById('saveBtn').disabled = false;
       const tr = row(msg.zone);
       if (msg.zone_type_label) tr.querySelector('.type').textContent = msg.zone_type_label;
       if (msg.name) tr.querySelector('.name').textContent = msg.name;
@@ -133,6 +192,39 @@ function setStatus(msg, isError) {
   const el = document.getElementById('status');
   el.textContent = msg;
   el.className = isError ? 'error' : '';
+}
+
+function csvEscape(value) {
+  const s = String(value);
+  return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+// Saves the scan as a CSV report -- the same zone/type/name data this UI
+// would eventually let a tech reload for write-mode editing (once that
+// exists). Not tied to scan completion: a tech can save whatever's been
+// read so far, including after Stop.
+function saveScan() {
+  const zones = Object.keys(results).map(Number).sort((a, b) => a - b);
+  if (!zones.length) { setStatus('No scan results to save yet.', true); return; }
+
+  const rows = [['Zone', 'Type Code', 'Type Label', 'Name']];
+  for (const zone of zones) {
+    const r = results[zone];
+    rows.push([zone, r.zone_type_code || '', r.zone_type_label || '', r.name || '']);
+  }
+  const csv = rows.map((r) => r.map(csvEscape).join(',')).join('\r\n');
+  const panelType = document.getElementById('panelType').value;
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `vista-${panelType}-zones-${stamp}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(a.href);
+  setStatus('Saved scan to CSV.');
 }
 </script>
 </body>
