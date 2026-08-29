@@ -103,6 +103,67 @@ in-use address, pull the field keypad, take its address) rather than
 inventing a new workflow — the sniffing feature just automates the
 "identify" step instead of requiring the tech to already know it.
 
+## Installer code recovery ("back door") flow
+
+A base-structure capability, not a per-model add-on: Honeywell builds a
+power-up installer-code recovery sequence into every Vista panel, so this
+belongs in the onboarding flow for all supported panel models (20P today,
+10P/15P/128BPT as they come online) rather than being scoped to one.
+
+**The underlying trick** (standard Honeywell/Ademco field technique, not
+something this tool invents): fully power-cycle the panel (remove the
+battery lead *and* AC), reconnect AC only, and hold `*` and `#` together as
+it boots. If the panel hasn't been dealer-programmed to lock this out, it
+drops straight into the programming menu without the real installer code.
+On the 10/15/20P, sending `#00` from there echoes the installer code back
+two digits at a time across four steps (e.g. "01" "02" "03" "04" for
+installer code "1234").
+
+**UX** — surfaces as an alternative path at the installer-code entry step,
+not a separate top-level menu:
+
+1. Next to the normal installer-code field, an "I don't know it / attempt
+   back door" option.
+2. Selecting it opens an interstitial with two choices: **Go back** (I know
+   the code — returns to normal entry, no side effects) or **Begin**.
+3. **Begin** prompts "Power down the panel — remove the battery lead, then
+   remove AC power — then tap OK", blocking on acknowledgment.
+4. Next prompt tells the tech to reconnect AC power. The tool does not sleep
+   a fixed delay here — it actively watches the bus transport and waits for
+   traffic to resume on its own schedule.
+5. As soon as the bus comes back alive, the tool sends the `*`+`#` combo
+   into the panel's boot window and checks whether the programming menu
+   came up (vs. lockout). On success:
+   - Send `#00`.
+   - Capture the four two-digit display steps and reassemble them into the
+     4-digit installer code.
+   - Send `*99` to exit programming mode immediately, same as every other
+     program-mode path in this tool (see `zone_discovery.py`'s safety rule
+     6 — never left sitting in programming mode).
+   - Surface the recovered code to the tech and offer to carry it straight
+     into the installer-code field instead of making them retype it.
+6. If the panel doesn't respond as expected within a bounded timeout
+   (locked out, boot-window missed, or a panel family this doesn't apply
+   to) — report the failure plainly and drop back to manual entry. Never
+   blind-retry against a live bus.
+
+**Open questions / per-model risk**, carried into the roadmap below:
+
+- The `#00` two-digit/four-step readback is confirmed for 10P/15P/20P only.
+  Vista-128BPT and other larger panels almost certainly use a different
+  keystroke or output shape for the same underlying back door — needs
+  real-hardware verification before this option is enabled for those
+  models, even though the feature itself is tracked as an all-panel
+  roadmap item from the start.
+- Panels can have this back door administratively disabled ("installer
+  lockout") — the "if successful (not locked out)" condition in the
+  process description. The UI must treat that as an expected failure path,
+  not a bug.
+- The `*`+`#` combo has to land inside the panel's boot window, and the
+  tool is driving this off "bus traffic resumed" detection rather than a
+  fixed sleep — the actual acceptable window size is unconfirmed until
+  tested against real hardware.
+
 ## Software scope: read/write
 
 **Read is done.** `vista_tool/zone_discovery.py` implements the `*56`/`*82`
@@ -147,6 +208,12 @@ than being redesigned for them later (see HARDWARE_ARCHITECTURE.md
    mind as a second transport option specifically for that panel family,
    separate from the Polling Loop work.
 
+Installer-code recovery (see "Installer code recovery ('back door') flow"
+above) is a base onboarding capability tracked across this whole roadmap,
+not a per-model feature — but its keystroke sequence is only confirmed for
+10P/15P/20P today; enabling it for 128BPT depends on the same real-hardware
+verification the rest of that panel's support does.
+
 ## Open threads
 
 Carried forward from earlier discussion, still unresolved:
@@ -169,6 +236,11 @@ Carried forward from earlier discussion, still unresolved:
    Deliberately not being worked out yet — hardware isn't in hand. Will be
    done pin-by-pin once the RP2040 and interface components are physically
    available.
+6. **Installer code back-door boot-window timing** — the `*`+`#` combo has
+   to be sent as soon as the bus comes back alive after AC reconnect;
+   how forgiving that timing window actually is (and how the tool should
+   distinguish "missed the window" from "locked out") is unconfirmed until
+   tested against real hardware. See "Installer code recovery" above.
 
 ## Resolved since first written
 

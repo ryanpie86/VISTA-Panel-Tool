@@ -73,3 +73,10 @@ not near-term work.
 3. **Write-mode is deferred** until the above is confirmed working — treat
    it as an add-on feature, not next-up work. Needs real keystroke-sequence
    protocol knowledge to be documented first (see `CONCEPT.md`).
+4. **Installer code recovery ("back door")** is planned as a base onboarding
+   capability across all panel models (not a per-model add-on) — an
+   "I don't know it / attempt back door" option next to the installer-code
+   field that walks the tech through a power cycle and automatically
+   recovers the code via the panel's own `*`+`#`-at-boot menu. Confirmed
+   keystroke behavior (`#00`'s two-digit/four-step readback) only for
+   10P/15P/20P so far. See "Installer code recovery" in `CONCEPT.md`.
