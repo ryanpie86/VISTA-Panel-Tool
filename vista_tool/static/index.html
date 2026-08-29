@@ -15,7 +15,7 @@
   h1 { font-size: 18px; margin: 0; }
   main { flex: 1; overflow-y: auto; padding: 16px 20px; }
   .form-row { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
-  input[type=text], input[type=password] {
+  input[type=text], input[type=password], select {
     background: #1c1f26; border: 1px solid #2a2e37; color: #e8eaed;
     padding: 12px 14px; border-radius: 8px; font-size: 16px; flex: 1; min-width: 140px;
   }
@@ -39,7 +39,16 @@
 <header><h1>Vista Panel Tool — Zone Discovery</h1></header>
 <main>
   <div class="form-row">
+    <select id="panelType">
+      <option value="20P">Vista-20P</option>
+      <option value="21IP">Vista-21IP (built-in radio, programs identically)</option>
+    </select>
+  </div>
+  <div class="form-row">
     <input id="installerCode" type="password" placeholder="Installer code" inputmode="numeric">
+    <button id="backdoorBtn" type="button" onclick="useBackdoorCode()">I don't know / attempt back door</button>
+  </div>
+  <div class="form-row">
     <label><input id="readTypes" type="checkbox" checked> Zone types (*56)</label>
     <label><input id="readNames" type="checkbox"> Zone names (*82, re-saves)</label>
   </div>
@@ -57,6 +66,15 @@
 <script>
 let ws = null;
 const results = {};
+
+// Ademco/Honeywell Vista installer default code -- programs identically on
+// 20P and 21IP (21IP just adds a built-in radio). For techs who don't have
+// the site's actual installer code on hand.
+const BACKDOOR_INSTALLER_CODE = '4112';
+
+function useBackdoorCode() {
+  document.getElementById('installerCode').value = BACKDOOR_INSTALLER_CODE;
+}
 
 function row(zone) {
   let tr = document.getElementById('row-' + zone);
@@ -82,6 +100,7 @@ function startScan() {
   ws.onopen = () => {
     ws.send(JSON.stringify({
       installer_code: code,
+      panel_type: document.getElementById('panelType').value,
       read_types: document.getElementById('readTypes').checked,
       read_names: document.getElementById('readNames').checked,
     }));
