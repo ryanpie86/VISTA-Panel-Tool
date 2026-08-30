@@ -34,6 +34,37 @@ repo is that document turned into runnable, transport-agnostic code.
   backend and touchscreen-sized single-page UI. Runs a scan over a
   WebSocket with live per-zone progress.
 
+## UI Features
+
+Screenshots of the current web UI (touchscreen-sized single-page app, dark
+theme). Captured from `vista_tool/static/index.html` running against a
+scripted fake panel, since real Vista hardware isn't required to exercise
+the UI itself.
+
+> **Keep these current:** whenever a push changes the UI, re-capture these
+> screenshots and update this section in the same push. See
+> `docs/screenshots/README.md` for how.
+
+**Home** — panel model, installer code, and a backdoor-code button up
+front; `Next` unlocks once a code is entered.
+
+![Home screen](docs/screenshots/home.png)
+
+**Tools** — the app's menu: Zone Discovery today, Write Configuration and
+Reports as visible-but-not-yet-built placeholders, plus Save Site.
+
+![Tools screen](docs/screenshots/tools.png)
+
+**Zone Discovery** — live per-zone progress during a scan, with Save
+exporting the results table as a CSV report.
+
+![Zone Discovery screen, scan complete](docs/screenshots/zone-discovery.png)
+
+**Load Previous Site** — reload a previously saved site's data without
+re-scanning or re-entering an installer code.
+
+![Load previous site screen](docs/screenshots/load-site.png)
+
 ## Running the UI against a real Envisalink today
 
 ```
