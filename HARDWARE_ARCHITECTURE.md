@@ -101,6 +101,19 @@ spare USB port or header) for an additional interface module later rather
 than assuming the ECP board is the only thing that will ever plug into the
 Pi. Not a current blocker; revisit when those modules become real.
 
+## Wireless (RF) receiver visibility
+
+Because the bus interface is a non-isolated tap on the same 4-wire keypad
+bus a wireless receiver module (e.g. 5881ENL) broadcasts onto, this
+hardware is electrically positioned to see raw RF receiver sentences the
+same way AlarmDecoder (AD2) does — a superset of what an Envisalink
+EVL3/EVL4 can ever expose over TPI, since the EVL4 only relays the panel's
+own already-decided reporting. That RF-sentence decode is not implemented
+by the current firmware plan (esphome-vistaECP's `VistaECP` class targets
+keystroke injection and alpha-display capture) — it would need to be added
+explicitly. See CONCEPT.md's "Wireless (RF) zone visibility" section for
+the testing that established this and the open-thread tracking it.
+
 ## Data flow
 
 ```

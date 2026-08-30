@@ -156,6 +156,52 @@ is meant to leave room for these as future add-on interface modules rather
 than being redesigned for them later (see HARDWARE_ARCHITECTURE.md
 "Modularity" section).
 
+## Wireless (RF) zone visibility — datalogger role
+
+Relevant to the **stationary datalogger** role above: testing against a real
+Vista-20P + EVL4 (`envisalink_new`) established that the EVL4's TPI protocol
+cannot see wireless-zone loop detail, and this is a firmware/protocol
+limitation of the EVL4 specifically — not a property of the keypad bus it's
+wired to.
+
+- **What was tested:** a live in-service wireless zone in a genuine
+  "CHECK 14" (RF supervision trouble) condition was monitored for ~14.5
+  hours of debug-captured TPI traffic. The panel only ever sent repeating
+  `%00` keypad-alpha frames (its own display text) — never the `%03`
+  Realtime Contact-ID event, despite having CID codes defined for exactly
+  this condition. Separately, an unprogrammed transmitter (serial
+  `0231910`) was triggered ~30 times across open/close and tamper loops
+  with continuous debug logging active; the EVL4 showed no trace of the
+  serial or of any unrecognized command code — no indication an RF
+  transmission occurred at all.
+- **Why:** everything the EVL4 exposes over TPI (`%00` alpha updates, `%03`
+  CID events) is the panel's own already-decided reporting, not a tap of
+  the raw wireless-receiver data. The EVL4 is wired to the same 4-wire
+  keypad bus a keypad uses, but its firmware only relays what the panel
+  itself chooses to report, and never at per-loop (open/close vs. tamper
+  vs. battery) or per-serial (unenrolled transmitter) granularity.
+- **Contrast — AlarmDecoder (AD2Pi/AD2USB):** confirmed from
+  `nutechsoftware/alarmdecoder`'s source, AD2 hardware taps the same kind of
+  keypad bus, but at the receiver-broadcast level: the wireless receiver
+  module (e.g. 5881ENL) puts every RF packet it hears directly onto the bus
+  as a raw sentence, regardless of panel enrollment, because zone
+  assignment is the panel's downstream decision, not the receiver's. AD2
+  decodes this into `!RFX:<7-digit serial>,<hex>` lines, with the hex
+  byte's bits carrying loop1-4/battery/supervision detail — for any
+  transmitter in RF range, enrolled or not.
+- **Implication for this hardware:** the RP2040 in this build clips onto the
+  same physical keypad/ECP bus AD2 uses, not the EVL4's TPI abstraction —
+  so it is electrically positioned to see the same raw receiver broadcasts
+  AD2 sees. That is **not** automatic, though: the current firmware plan
+  (porting esphome-vistaECP's `VistaECP` class) targets keystroke injection
+  and alpha-display capture, not decoding the wireless-receiver sentence.
+  Getting AD2-parity RF visibility (per-serial, per-loop, independent of
+  panel zone programming) means adding that decode explicitly — it's a
+  distinct, currently-unbuilt piece of firmware work, not a side effect of
+  using a non-isolated bus tap. Tracked as an open thread below; relevant
+  once the datalogger role is built out, not part of the near-term
+  zone-discovery/read-write scope.
+
 ## Panel model roadmap
 
 1. **Vista-20P** — done (validated, per the original protocol notes).
@@ -196,6 +242,12 @@ Carried forward from earlier discussion, still unresolved:
 7. **Reload a saved scan into a write-mode editor** — depends on write-mode
    existing at all (see item 3); the CSV `Save` output is meant to be that
    editor's eventual input format.
+8. **Wireless receiver (RF) decode firmware** — see "Wireless (RF) zone
+   visibility" above. Confirmed by testing that the EVL4/TPI path can't
+   surface this data, and that AD2-style raw receiver-broadcast decoding
+   would need to be added explicitly to the RP2040 firmware (not inherited
+   for free from the non-isolated bus tap). Relevant to the stationary
+   datalogger role; not part of near-term zone-discovery/read-write scope.
 
 ## Resolved since first written
 
