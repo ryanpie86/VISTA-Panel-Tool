@@ -1,8 +1,7 @@
 # Vista Panel Tool
 
-A field-technician tool for Honeywell/Ademco Vista-20P alarm panels:
-zone discovery today (read zone types and names via the panel's own `*56`
-and `*82` installer menus), with panel config read/write intended as later
+A field-technician tool for Honeywell/Ademco Vista alarm panels:
+zone discovery today (read zone types and names via the panel's own installer menus), with panel config read/write intended as later
 scope (deliberately deferred — see "Next steps" below). Designed to run on
 a handheld: a Raspberry Pi driving a touchscreen web UI, paired with an
 RP2040 coprocessor that clips directly onto the panel's keypad bus — no
@@ -17,7 +16,7 @@ repo is that document turned into runnable, transport-agnostic code.
 
 ## Status
 
-- `vista_tool/zone_discovery.py` — the *56/*82 walk and parsing logic,
+- `vista_tool/zone_discovery.py` — the zone walk and parsing logic,
   ported from `envisalink_new`'s Home Assistant integration, transport-
   agnostic, safety rules intact. **Fully implemented and tested** (see
   `tests/`, including regression tests for the two real-hardware bugs the
