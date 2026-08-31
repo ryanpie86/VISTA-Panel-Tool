@@ -156,8 +156,37 @@ Vista panel keypad bus (4-wire ECP)
 1. **Bench-validate the RP2040 firmware against a real Vista-20P** using a
    plain serial terminal before wiring in the Pi/UI/battery/enclosure —
    isolates bus timing bugs from application bugs, matching the "test
-   methodology" lesson in the protocol notes (a live end-to-end run catches
-   things a walk-through or a single capture won't). Next real milestone.
+   methodology" lesson in the protocol notes. Next real milestone.
+
+   **Update (scope captures, pre-RP2040):** First oscilloscope readings
+   taken directly off the live bus (existing keypad still attached).
+   Findings:
+   - Idle-high ~13.0-13.2V, active-low ~0.49-0.69V on the Green (RX) line —
+     confirms the resistor-divider + NPN-transistor interface (non-isolated,
+     per the BOM decision above) is workable as designed.
+   - Bit timing is much slower than the "microsecond-scale" figure this doc
+     inherited from esphome-vistaECP's general characterization: measured
+     bit cells ≈3.06ms (326Hz), grouped into byte/frame bursts ≈53ms apart
+     (18Hz), full poll transaction repeating ≈663ms (1.5Hz). This gives the
+     RP2040 considerably more timing slack than assumed — worth confirming
+     with a couple more captures, but a good sign for firmware margin.
+   - Divider math confirmed against real levels: 13.0V × (3.3k/13.3k) ≈
+     3.2V, matching the interface circuit's own design target.
+   - **Two follow-ups before finalizing R1/R2 values:** (a) the Yellow
+     (TX-from-panel) line — the one actually feeding the RP2040 GPIO — still
+     needs a clean full-scale capture; the only capture taken so far was
+     misconfigured at 100mV/div on a 13V line and came out clipped. (b) At
+     worst-case AUX spec (13.8-14V vs. the ~13V measured on this bench),
+     the divider output approaches ~3.4-3.5V against the RP2040's ~3.6V
+     GPIO absolute max — thin margin for a tool that'll see other panels
+     in the field. Recommend either tightening the divider ratio (e.g. R2
+     → 2.2k) or adding a small clamp diode to 3.3V for insurance.
+   - **Draft interface schematic has a pin conflict**: GPIO_26 was labeled
+     as both the Yellow-line input and the driver for the Green-line
+     transistor's base resistor. Needs two distinct GPIOs — GPIO_26 stays
+     as the Yellow input, base-drive moves to GPIO_27 (or a third pin, if
+     read-back of the RP2040's own drive on the Green line is wanted for
+     collision/arbitration sensing).
 2. **Battery capacity** — deliberately left undecided, and not needed
    during the development/testing phase — the build will run on isolated
    wall power (via the isolated USB-C/DC-DC charge path already in the
