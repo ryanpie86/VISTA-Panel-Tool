@@ -220,7 +220,10 @@ wired to.
 Carried forward from earlier discussion, still unresolved:
 
 1. **Bench-validate RP2040 firmware** against a real Vista-20P via serial
-   terminal before wiring in the rest of the build.
+   terminal before wiring in the rest of the build. First scope captures
+   done pre-RP2040 (levels + timing) — see HARDWARE_ARCHITECTURE.md
+   "Still open" item 1 for findings; full validation still waits on the
+   RP2040 itself being wired in.
 2. **Battery runtime budget** — deferred entirely; not needed during the
    development/testing phase, which runs on isolated wall power. Revisit
    once hardware bring-up is done and case dimensions are set.
