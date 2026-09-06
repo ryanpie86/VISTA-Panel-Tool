@@ -3,9 +3,12 @@
 A field-technician tool for Honeywell/Ademco Vista alarm panels:
 zone discovery today (read zone types and names via the panel's own installer menus), with panel config read/write intended as later
 scope (deliberately deferred — see "Next steps" below). Designed to run on
-a handheld: a Raspberry Pi driving a touchscreen web UI, paired with an
-RP2040 coprocessor that clips directly onto the panel's keypad bus — no
-Envisalink module required in the field.
+a headless Raspberry Pi that serves a mobile-sized web UI over WiFi
+(its own hotspot by default, or a joined site network — see `CONCEPT.md`
+"Networking"), paired with an RP2040 coprocessor that clips directly onto
+the panel's keypad bus — no Envisalink module and no on-device screen
+required in the field; every session runs in a tech's own phone or laptop
+browser.
 
 See `CONCEPT.md` (project doc) for the full product concept, roadmap, and
 decision history; `HARDWARE_ARCHITECTURE.md` (also saved to the project)
@@ -30,15 +33,17 @@ repo is that document turned into runnable, transport-agnostic code.
   from `Dilbert66/esphome-vistaECP`'s ECP library) still needs to be built;
   this file is ready for it.
 - `vista_tool/app.py` + `vista_tool/static/index.html` — minimal FastAPI
-  backend and touchscreen-sized single-page UI. Runs a scan over a
-  WebSocket with live per-zone progress.
+  backend and a mobile-sized single-page UI, meant to be opened in a
+  browser (phone or laptop) rather than shown on a local screen. Runs a
+  scan over a WebSocket with live per-zone progress.
 
 ## UI Features
 
-Screenshots of the current web UI (touchscreen-sized single-page app, dark
-theme). Captured from `vista_tool/static/index.html` running against a
-scripted fake panel, since real Vista hardware isn't required to exercise
-the UI itself.
+Screenshots of the current web UI (mobile-sized single-page app, dark
+theme), as seen in a browser — the device itself is headless, with no
+on-board screen. Captured from `vista_tool/static/index.html` running
+against a scripted fake panel, since real Vista hardware isn't required to
+exercise the UI itself.
 
 > **Keep these current:** whenever a push changes the UI, re-capture these
 > screenshots and update this section in the same push. See
