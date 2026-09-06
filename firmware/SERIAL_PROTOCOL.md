@@ -9,10 +9,12 @@ Green bus-monitor tap=GP28, using the same non-isolated resistor-divider +
 transistor bus-interface circuit as esphome-vistaECP's ESP32 build, see
 `HARDWARE_ARCHITECTURE.md` "Bus coprocessor: RP2040-Zero"). The Pi never
 touches bus timing -- it only sees a simple newline-delimited text protocol
-over hardware UART (GP0/GP1 on the RP2040-Zero, GPIO14/15 on the Pi;
-115200 8N1), intentionally shaped like the Envisalink TPI lines so the same
-`PushUpdatePollingTransport` base class and the same zone_discovery walk
-logic work unmodified against either transport.
+over USB-serial (a single USB-C cable, 115200 8N1; a UART-over-GPIO-header
+plan was tried and reverted once remote firmware flashing from the Pi came
+into scope -- see `HARDWARE_ARCHITECTURE.md` "RP2040-Zero <-> Pi
+interconnect"), intentionally shaped like the Envisalink TPI lines so the
+same `PushUpdatePollingTransport` base class and the same zone_discovery
+walk logic work unmodified against either transport.
 
 This file is the contract `rp2040_serial.py` implements against. The actual
 RP2040 firmware (PlatformIO/Arduino, reusing esphome-vistaECP's ECP class
