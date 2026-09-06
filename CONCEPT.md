@@ -24,12 +24,16 @@ separate "logger mode" device, just the same tool used differently.
 
 ## Hardware direction (summary — full detail in HARDWARE_ARCHITECTURE.md)
 
-- Raspberry Pi 4 (8GB) + RP2040 (Pico) coprocessor for real-time ECP bus
-  timing. Android-tablet and fully-custom-tablet alternatives were both
-  considered and rejected: Android would require sideloading/rooting to
-  get USB-serial access to custom hardware, which the user doesn't want;
-  a fully custom 12in build was more hardware R&D than warranted once a
-  Pi-based approach was back on the table.
+- Raspberry Pi 4 (8GB) as an interim/dev compute board — the Pi Zero 2 W is
+  the actual target board but is unobtainable during the ongoing 2026
+  shortage (other small boards were evaluated and rejected) — paired with
+  a Waveshare RP2040-Zero coprocessor (replacing the Pico) for real-time
+  ECP bus timing, linked over hardware UART rather than USB-serial.
+  Android-tablet and fully-custom-tablet alternatives were both considered
+  and rejected early on: Android would require sideloading/rooting to get
+  serial access to custom hardware, which the user doesn't want; a fully
+  custom 12in build was more hardware R&D than warranted once a Pi-based
+  approach was back on the table. Full detail in HARDWARE_ARCHITECTURE.md.
 - Non-isolated ECP bus interface (shares ground with the panel, same as a
   real physical keypad, for full signal fidelity) — isolation instead lives
   on the power path (see below), which is where the actual ground-loop
@@ -39,37 +43,49 @@ separate "logger mode" device, just the same tool used differently.
   supporting charging while running, for both portable use and overnight
   stationary logging.
 - Industrial/endurance-rated microSD for storage.
-- GeeekPi 10.1in HDMI+USB-touch display, 1280x800, kiosk/kickstand form
-  factor -- a small device that sits upright at an angle at the panel, not
-  a laptop-style device held/carried while in use.
-- Enclosure: user-designed and 3D-printed, with a kickstand; not a
-  software/electrical concern for this doc.
+- **No physical display** — the device is fully headless, interacted with
+  exclusively through a browser (see "Networking" below). The GeeekPi
+  10.1in touchscreen originally scoped for an on-device kiosk view was
+  dropped along with wired Ethernet as part of the same headless/WiFi-only
+  simplification.
+- Enclosure: user-designed and 3D-printed; no longer needs to accommodate
+  or prop up a display now that the device is headless — exact form factor
+  still the user's call, not a software/electrical concern for this doc.
 
 ## Networking
 
-All three of these are in scope from the start, not sequenced as
-nice-to-haves:
+The device is WiFi-only now (wired Ethernet was dropped along with the
+physical display — see "Hardware direction" above) and fully headless, so
+the network connection is also the only way in: there's no local
+touchscreen fallback if WiFi setup goes wrong.
 
-- **WiFi client** — joins existing site WiFi when available, same as a
-  laptop would.
-- **WiFi access-point / hotspot mode** — the device broadcasts its own
-  network. This is the auto-fallback: if no known WiFi is available (or as
-  the default, depending on final UX), a tech's laptop or phone joins the
-  device's hotspot directly and gets the same web UI a local touchscreen
-  would show. No dependency on site infrastructure.
-- **Wired Ethernet** — available via the Pi 4's built-in port, useful for
-  the stationary/overnight logging case where a wired drop is more
-  reliable than WiFi.
+- **Boots into AP mode by default**, broadcasting its own hotspot.
+- A tech joins that hotspot and submits WiFi credentials for the site
+  network through the web UI.
+- The device attempts a **STA (client) connection** to that network. If it
+  hasn't connected within **5 minutes**, it gives up and falls back to AP
+  mode so the tech is never locked out.
+- **Every reboot clears stored WiFi credentials and returns to AP mode** —
+  deliberately, not just on a failed connection attempt. This is a
+  simplicity/troubleshooting tradeoff (a tech always knows "power-cycle it
+  and it's back on its own hotspot," no stale-credential debugging) rather
+  than an attempt at persistent remembered-network convenience.
+- Must stay **2.4GHz-only** in the AP/STA config — the Pi Zero 2 W target
+  board has no 5GHz radio, even though the Pi 4 dev board does (see
+  HARDWARE_ARCHITECTURE.md "Compute board: Pi 4 now, Zero 2 W target").
+- **Still open:** the actual AP/STA switching implementation (hostapd +
+  wpa_supplicant + a watchdog script, vs. NetworkManager, vs. RaspAP) —
+  deferred, not blocking near-term work. See "Open threads" below.
 
-The web UI is the same regardless of client — on-device touchscreen and a
-remote browser are just two clients of the same local FastAPI server.
-**Concurrent sessions are explicitly fine** — multiple viewers (or the
-touchscreen plus a remote browser) can be connected at once. This does NOT
-mean multiple uncoordinated keystroke streams reach the panel — the
+The web UI is identical regardless of client — every browser (a tech's
+laptop or phone) is just a client of the same local FastAPI server, over
+whichever mode (AP or STA) is currently active. **Concurrent sessions are
+explicitly fine** — multiple viewers can be connected at once. This does
+NOT mean multiple uncoordinated keystroke streams reach the panel — the
 backend/firmware layer is responsible for serializing actual writes to the
-bus regardless of how many UI clients are watching or interacting; that's
-an implementation detail below the product-level "concurrent viewing is
-fine" decision.
+bus regardless of how many browsers are watching or interacting; that's an
+implementation detail below the product-level "concurrent viewing is fine"
+decision.
 
 ## Onboarding / keypad-address flow
 
@@ -235,11 +251,14 @@ Carried forward from earlier discussion, still unresolved:
 4. **Concurrency at the firmware/backend level** — serializing real
    keystroke sends when multiple UI clients are connected, now that
    concurrent viewing is confirmed to be fine at the product level.
-5. **RP2040 / ECP interface pin mapping** — esphome-vistaECP's reference
-   schematics only document ESP8266/ESP32 pin assignments, not RP2040.
-   Deliberately not being worked out yet — hardware isn't in hand. Will be
-   done pin-by-pin once the RP2040 and interface components are physically
-   available.
+5. **RP2040-Zero / ECP interface pin mapping** — esphome-vistaECP's
+   reference schematics only document ESP8266/ESP32 pin assignments (the
+   Pico-based mapping this project inherited needs remapping anyway now
+   that the RP2040-Zero has a different physical pinout — see
+   HARDWARE_ARCHITECTURE.md "Bus coprocessor: RP2040-Zero"). Will be done
+   pin-by-pin, including the GPIO_26 fix, once the board is in hand and the
+   UART interconnect wiring (see HARDWARE_ARCHITECTURE.md) is settled
+   alongside it.
 6. **PDF report export** — CSV export from a saved scan exists; PDF is the
    deferred half of the "Reports" tool entry.
 7. **Reload a saved scan into a write-mode editor** — depends on write-mode
@@ -251,14 +270,42 @@ Carried forward from earlier discussion, still unresolved:
    would need to be added explicitly to the RP2040 firmware (not inherited
    for free from the non-isolated bus tap). Relevant to the stationary
    datalogger role; not part of near-term zone-discovery/read-write scope.
+9. **AP/STA switching mechanism** — implementation choice (hostapd +
+   wpa_supplicant + a watchdog script vs. NetworkManager vs. RaspAP) for
+   the boot-into-AP / attempt-STA / 5-minute-timeout-fallback behavior in
+   "Networking" above. Deferred, not blocking.
 
 ## Resolved since first written
 
-- **Display**: 10.1in HDMI+USB-touch, kiosk-style with a kickstand -- not
-  laptop-style. Settled after initially considering 12in (rejected as too
-  tablet-scale for a Pi build) and a pocketable 3-5in handheld (rejected
+- **Display**: reversed from the previously decided 10.1in HDMI+USB-touch
+  kiosk display (settled after initially considering 12in, rejected as too
+  tablet-scale for a Pi build, and a pocketable 3-5in handheld, rejected
   once the "robust utility tool, not a cheap/clunky gadget" framing was
-  clarified).
+  clarified) to **no physical display at all** — the device is now fully
+  headless, interacted with exclusively via browser. See "Hardware
+  direction" and "Networking" above.
+- **Networking**: wired Ethernet dropped along with the display; the
+  device is WiFi-only now, boot-into-AP-mode-by-default with STA fallback
+  after a 5-minute timeout, and WiFi credentials cleared on every reboot.
+  See "Networking" above.
 - **Isolation strategy**: flipped from "isolate the bus" to "non-isolated
   bus (best fidelity) + isolated power path (where the real ground-loop
   risk actually lives)". See HARDWARE_ARCHITECTURE.md.
+- **Compute board**: Pi Zero 2 W remains the target but is unobtainable
+  during the 2026 shortage; Raspberry Pi 4 decided as the interim/dev
+  board, built to stay Zero-2W-compatible. See HARDWARE_ARCHITECTURE.md
+  "Compute board: Pi 4 now, Zero 2 W target".
+- **Bus coprocessor**: Waveshare RP2040-Zero decided, replacing the Pico.
+  See HARDWARE_ARCHITECTURE.md "Bus coprocessor: RP2040-Zero".
+- **RP2040 <-> Pi interconnect**: hardware UART over the GPIO header
+  decided, replacing USB-serial. See HARDWARE_ARCHITECTURE.md
+  "RP2040-Zero <-> Pi interconnect".
+- **ESP32-as-host** (replacing the Pi entirely): considered and set
+  aside — electrically viable over SPI, but would mean porting the entire
+  backend to embedded C, a much bigger lift than deciding the RP2040↔Pi
+  link alone. See HARDWARE_ARCHITECTURE.md "Considered and set aside".
+- **Client-side (browser-held) data storage**: considered and rejected —
+  it would break the stationary/unattended datalogger role (see "What this
+  is" above), since there'd be no persistence without an actively open,
+  connected browser tab. Storage stays on-device (industrial microSD, per
+  HARDWARE_ARCHITECTURE.md).

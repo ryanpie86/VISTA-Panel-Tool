@@ -22,37 +22,123 @@ way `esphome-vistaECP` already validates:
   timing, address-slot arbitration, keystroke injection, alpha-display
   capture, and keypad-address sniffing (scanning pulse-slot 3 — addresses
   16-23 per esphome-vistaECP's own pulse-allocation notes — for active
-  keypads before the tool claims an address). Talks to the Pi over USB
-  serial using the plain text protocol in `firmware/SERIAL_PROTOCOL.md`.
-  This is a near-direct port of esphome-vistaECP's `VistaECP` library
-  running outside ESPHome (its own README notes the library has no ESPHome
-  dependency and can be called directly).
+  keypads before the tool claims an address). Talks to the Pi over a
+  hardware UART link (see "RP2040-Zero <-> Pi interconnect" below) using
+  the plain text protocol in `firmware/SERIAL_PROTOCOL.md` — same
+  commands/format as the original USB-serial design, only the transport
+  changed. This is a near-direct port of esphome-vistaECP's `VistaECP`
+  library running outside ESPHome (its own README notes the library has no
+  ESPHome dependency and can be called directly).
 - **Raspberry Pi** — everything that isn't time-critical: the `vista_tool`
   Python backend (walk logic, safety checks, timeouts), the FastAPI web
-  server (serving both the on-device touchscreen and any remote browser on
-  the network — see `CONCEPT.md` networking section), and storage/logging.
-  If the Pi hiccups, worst case is a slow UI update — never a corrupted bus
-  frame.
+  server (serving the device's own AP-mode hotspot and, once joined to a
+  network, any browser on it — see `CONCEPT.md` "Networking" section), and
+  storage/logging. The device is fully headless — there's no local
+  display, every client is a browser. If the Pi hiccups, worst case is a
+  slow UI update — never a corrupted bus frame.
 
 This also means the RP2040 firmware is a genuinely separate, testable unit:
 it can be bench-validated against a real panel with nothing but a serial
-terminal, before the Pi software, touchscreen, or battery system are even
-wired in — planned as the first real build/test milestone.
+terminal, before the Pi software or battery system are even wired in —
+planned as the first real build/test milestone.
 
 ## Bill of materials (decisions marked; still-open items marked)
 
 | Role | Part | Status |
 |---|---|---|
-| Compute | **Raspberry Pi 4, 8GB** | **Decided** — user has several on hand. Also settles wired Ethernet (built-in) and headroom for a larger touchscreen than originally scoped. |
-| Bus coprocessor | Raspberry Pi Pico (RP2040) | **Decided for now.** Pinout follows esphome-vistaECP's documented RP2040 mapping. Treated as the first of potentially several interface modules (see "Modularity" below) — not expected to need reworking for the ECP-only milestone; a different/second MCU is an acceptable future refactor if the Pico can't keep up once Polling Loop or zone-terminal I/O modules are added, but that's a "cross that bridge later" concern, not a current blocker. |
-| Display | **GeeekPi 10.1in HDMI + USB-touch panel, 1280x800** | **Decided.** Not laptop-style — a small stand-up kiosk device with a kickstand, set down at the panel and worked via touch (or left running and monitored remotely). HDMI+USB (not DSI) at this size for wider vendor selection and resolution headroom; costs two cables instead of one DSI ribbon, and somewhat more power draw, both acceptable tradeoffs for the resolution gained. Single USB cable for touch input (not a hub), separate HDMI for video, separate external power adapter (not USB-bus-powered). |
-| Battery | **LiPo pouch pack, capacity undecided** | **Config decided, capacity open.** 1S2P (two cells in parallel, single nominal voltage — no balance leads needed, matches the original "single-cell" simplicity goal). Capacity pending enclosure dimensions (user is developing the case and will supply real size constraints). Sizing reference from the runtime discussion: ~6000mAh gets you right at a bare 2-hour floor on a *fresh* pack at an estimated 9-11W system draw (Pi 4 + 10.1in touchscreen + Pico + conversion losses) — that floor erodes below 2 hours as the pack ages (LiPo cells typically lose 20-30% capacity over their service life). Assistant's recommendation, not yet acted on: target a ~4hr fresh runtime (~11,000-13,000mAh) for real margin, since this is a kickstand/kiosk device that sits at the panel rather than being carried, making the size/weight cost of a bigger pack low. Final call waits on case dimensions. Not needed during the development/testing phase — the build will run on isolated wall power (via the isolated USB-C/DC-DC charge path below) until hardware is confirmed working. |
-| Charge + power management | **USB-C charging circuit, with pass-through/overnight-charge support, on an ISOLATED DC-DC/charge path** | **Decided (revised).** The device runs off battery in the field and stays on USB-C power (charging while running) for unattended overnight logging sessions — not powered from the panel's own AUX terminals. Needs a charge IC/board that supports simultaneous charge+discharge (TP4056-style boards do NOT reliably support this — look at USB-C PD trigger + a proper charge/power-path IC, or a PowerBoost-style board that explicitly supports it) AND provides galvanic isolation between the external USB-C input and the internal battery/Pi/Pico rails (e.g. an isolated DC-DC converter module on the charge path). This is where the ground-loop protection now lives — see "Isolation strategy" below. |
-| Bus interface (Pico <-> panel) | **Non-isolated** (resistor-divider + opto/transistor, per esphome-vistaECP's "simple version" schematic — their recommended default) | **Decided (revised from ground-isolated).** Shares ground directly with the panel, same as a real physical keypad's wiring (4-wire, no isolation, always has been how keypads connect). Chosen for full signal fidelity with zero compromise — esphome-vistaECP's own README calls this the best-signal, most-recommended option and calls the ground-isolated variant "least recommended" for signal quality. See "Isolation strategy" below for why this is safe given where isolation now lives instead. |
+| Compute | **Raspberry Pi 4, 8GB** (interim/dev board) | **Decided for now.** Pi Zero 2 W is the actual target board but is unobtainable during the ongoing 2026 shortage (Pi 3A+, Radxa Zero 3W, and Orange Pi Zero 2W/3 were evaluated as substitutes and rejected). User has several Pi 4s on hand, so it's the dev/bring-up board — build must stay Zero-2W-compatible throughout. See "Compute board: Pi 4 now, Zero 2 W target" below. |
+| Bus coprocessor | **Waveshare RP2040-Zero** (ordered) | **Decided**, replacing the Pico. Same RP2040 silicon (firmware/SDK unaffected), but a different physical pinout — esphome-vistaECP's Pico-based pin assignments in the current schematic must be remapped pin-by-pin, which is also the opportunity to fix the existing GPIO_26 dual-assignment conflict (see "Still open" below) rather than patching it separately. See "Bus coprocessor: RP2040-Zero" below for LED/debug-connector differences. Still treated as the first of potentially several interface modules (see "Modularity" below). |
+| Bus coprocessor link | **UART over the Pi's GPIO header** (TX/RX crossed + shared GND, plus a 5V+GND pair to power the RP2040-Zero from the Pi) | **Decided**, replacing USB-serial. See "RP2040-Zero <-> Pi interconnect" below. |
+| Battery | **LiPo pouch pack, capacity undecided** | **Config decided, capacity open.** 1S2P (two cells in parallel, single nominal voltage — no balance leads needed, matches the original "single-cell" simplicity goal). Capacity pending enclosure dimensions (user is developing the case and will supply real size constraints). Sizing reference from the runtime discussion: ~6000mAh gets you right at a bare 2-hour floor on a *fresh* pack at an estimated 9-11W system draw (Pi 4 + Pico/RP2040 + conversion losses, measured without a display since the device is now headless) — that floor erodes below 2 hours as the pack ages (LiPo cells typically lose 20-30% capacity over their service life). Assistant's recommendation, not yet acted on: target a ~4hr fresh runtime (~11,000-13,000mAh) for real margin. Final call waits on case dimensions **and** on retesting the power draw on actual Zero 2 W hardware — Pi 4 draw figures are not valid for Zero 2 W sizing (see "Compute board" below). Not needed during the development/testing phase — the build will run on isolated wall power (via the isolated USB-C/DC-DC charge path below) until hardware is confirmed working. |
+| Charge + power management | **USB-C charging circuit, with pass-through/overnight-charge support, on an ISOLATED DC-DC/charge path** | **Decided (revised).** The device runs off battery in the field and stays on USB-C power (charging while running) for unattended overnight logging sessions — not powered from the panel's own AUX terminals. Needs a charge IC/board that supports simultaneous charge+discharge (TP4056-style boards do NOT reliably support this — look at USB-C PD trigger + a proper charge/power-path IC, or a PowerBoost-style board that explicitly supports it) AND provides galvanic isolation between the external USB-C input and the internal battery/Pi/RP2040 rails (e.g. an isolated DC-DC converter module on the charge path). This is where the ground-loop protection now lives — see "Isolation strategy" below. |
+| Bus interface (RP2040 <-> panel) | **Non-isolated** (resistor-divider + opto/transistor, per esphome-vistaECP's "simple version" schematic — their recommended default) | **Decided (revised from ground-isolated).** Shares ground directly with the panel, same as a real physical keypad's wiring (4-wire, no isolation, always has been how keypads connect). Chosen for full signal fidelity with zero compromise — esphome-vistaECP's own README calls this the best-signal, most-recommended option and calls the ground-isolated variant "least recommended" for signal quality. See "Isolation strategy" below for why this is safe given where isolation now lives instead. |
 | Storage | **Industrial/endurance-rated microSD** | **Decided** — user has a good track record with these for continuous read/write workloads, covers the datalogging use case without needing an NVMe HAT. |
 | Panel connection | 4-conductor cable + small screw terminal or keypad-style connector | Matches how a real alpha keypad taps the bus (red/black/yellow/green: +12V, GND, data-in, data-out). |
-| Networking | Pi 4's built-in WiFi + Ethernet, software AP-mode fallback | See `CONCEPT.md` — WiFi client, WiFi hotspot (auto-fallback), and wired Ethernet all supported; no new hardware needed beyond what the Pi 4 already has. |
-| Enclosure | **User-designed, 3D-printed, with kickstand** | Out of scope for this doc — sized around the 10.1in display/battery/board stack above. Kiosk-style: sits upright at an angle at the panel, not held/carried like a laptop while in use. |
+| Networking | Pi's built-in WiFi only, AP-mode-first with STA fallback | **Decided (revised — wired Ethernet and the physical display both dropped; device is headless/WiFi-only).** See `CONCEPT.md` "Networking" for the AP/STA flow. No new hardware needed beyond the Pi's onboard radio; config must stay 2.4GHz-only for Zero 2 W compatibility (see "Compute board" below). |
+| Enclosure | **User-designed, 3D-printed** | Out of scope for this doc — sized around the battery/board stack now that there's no display to accommodate. Kiosk/kickstand framing no longer applies since there's nothing to view locally; exact form factor still the user's call. |
+
+## Compute board: Pi 4 now, Zero 2 W target
+
+The Pi Zero 2 W was the original target board (small footprint, matches
+the "handheld" framing) but is unobtainable during the ongoing 2026 supply
+shortage. Alternatives evaluated and rejected for now: Pi 3A+, Radxa Zero
+3W, Orange Pi Zero 2W/3. **Decided:** build on a Raspberry Pi 4 (user has
+several on hand) as the interim/dev board, with the Zero 2 W remaining the
+target once available. The Pi 4 build must stay Zero-2W-compatible, which
+means baking in these constraints now rather than discovering them at
+swap-over time:
+
+- **`dtoverlay=dwc2,dr_mode=host`** in `config.txt`, added now — needed for
+  the Zero 2 W's OTG port to act as a USB host; harmless on the Pi 4.
+  Superseded if the RP2040-Zero interconnect stays UART (see below) instead
+  of USB, but cheap to keep in place either way.
+- **2.4GHz-only WiFi/hostapd config, always** — the Zero 2 W has no 5GHz
+  radio; the Pi 4 does. Don't let 5GHz creep into the AP/STA config during
+  Pi 4 development.
+- **Memory usage discipline** — the Zero 2 W has 512MB vs. the Pi 4's
+  2-8GB. Avoid unbounded in-memory accumulation (scan history, logging
+  buffers, worker counts); periodically test under an artificial memory
+  limit rather than assuming Pi 4 headroom will always be there.
+- **No dependency on `eth0` being present** in application code, even
+  though the Pi 4's Ethernet port is sitting right there unused in dev —
+  the Zero 2 W has none, and the product is WiFi-only now regardless (see
+  `CONCEPT.md` "Networking").
+- **Battery/power-draw measurements taken on the Pi 4 are not valid for
+  Zero 2 W sizing** — the battery capacity decision (see "Still open"
+  below) stays open until measured on actual Zero 2 W hardware.
+
+## Bus coprocessor: RP2040-Zero
+
+**Decided:** Waveshare RP2040-Zero (ordered), replacing the Pico. Same
+RP2040 silicon, so the firmware/SDK is unaffected, but the physical pinout
+differs from the Pico — esphome-vistaECP's Pico-based pin assignments in
+the current schematic must be remapped pin-by-pin against the RP2040-Zero's
+actual layout, not assumed. Doing that remap is also the opportunity to fix
+the existing GPIO_26 dual-assignment conflict noted under "Still open"
+below, rather than patching it separately on the old Pico pinout.
+
+Two other physical differences worth planning around:
+
+- **Status LED is WS2812 (addressable RGB)**, on a different GPIO than the
+  Pico's simple LED. Since the device is now fully headless, this LED
+  becomes a real UI surface — worth using for AP-mode/connected/error
+  status signaling rather than just a heartbeat blink.
+- **No keyed SWD debug connector** — the Pico H's keyed header is gone;
+  the RP2040-Zero exposes SWD as bare test pads only. Hardware debugging
+  (if ever needed beyond the serial/UART link) means hand-wiring probes to
+  those pads.
+
+## RP2040-Zero <-> Pi interconnect: UART, not USB-serial
+
+**Decided:** the RP2040-Zero talks to the Pi over hardware UART on the
+GPIO header instead of USB-serial. The protocol itself is unchanged — the
+plain-text command/response format in `firmware/SERIAL_PROTOCOL.md` is
+the same either way, only the transport changes.
+
+Wiring: TX→RX and RX→TX crossed, plus a shared GND (3 signal wires), plus a
+separate 5V+GND pair off the Pi's header to power the RP2040-Zero directly
+(it has an onboard regulator, so raw 5V-in is fine). Both boards are 3.3V
+logic, so no level shifting is needed.
+
+Required changes to make this work:
+
+- **Pi side:** `dtoverlay=disable-bt` in `config.txt`, which frees the full
+  PL011 UART from Bluetooth back onto GPIO14/15 — without it, the Pi falls
+  back to the "mini UART," which drifts under CPU frequency scaling and
+  isn't reliable for this link. Also disable the serial console via
+  `raspi-config` → Interface Options → Serial Port (login shell: **No**,
+  hardware: **Yes**) so the UART is free for the RP2040 link instead of a
+  getty.
+- **Firmware side:** swap `stdio_usb`/`Serial` (USB) for the hardware UART
+  peripheral (`uart0`/`uart1`, or `Serial1` in Arduino-Pico) in the
+  RP2040-Zero firmware. No change to the protocol/parsing logic itself.
+- **Caution:** confirm the RP2040-Zero's actual UART pin locations against
+  its real pinout diagram before wiring — don't assume the Pico's pin
+  numbers carry over along with the pin remap work above.
+
+Side benefit: this frees the RP2040-Zero's USB-C port entirely for
+firmware flashing and debugging, separate from the operational data link —
+previously that port was doing double duty.
 
 ## Isolation strategy: isolate the power path, not the data path
 
@@ -83,7 +169,7 @@ reflection that's solving the problem in the wrong place:
   is a field-dependent assumption, not a guarantee.
 - So: **isolate the power input instead.** An isolated DC-DC converter or
   isolated USB-C charge module between the external power connector and
-  the internal battery/Pi/Pico rails closes the ground-loop risk
+  the internal battery/Pi/RP2040 rails closes the ground-loop risk
   regardless of what charging source gets used in the field (wall brick,
   laptop USB port, car adapter, whatever), while leaving the ECP bus
   interface fully non-isolated for full signal fidelity, always. Best of
@@ -100,6 +186,18 @@ design shouldn't paint itself into a corner: leave room (board space, a
 spare USB port or header) for an additional interface module later rather
 than assuming the ECP board is the only thing that will ever plug into the
 Pi. Not a current blocker; revisit when those modules become real.
+
+## Considered and set aside
+
+Noted here rather than dropped from history, in case either becomes
+relevant again later:
+
+- **ESP32-as-host** (replacing the Pi entirely, RP2040↔ESP32 over SPI with
+  the RP2040 as SPI master and the ESP32 as slave — ESP8266 slave mode was
+  ruled out as unreliable). Electrically viable, but would mean porting the
+  entire backend (FastAPI/Python walk logic, storage, WiFi management) to
+  embedded C — a much bigger lift than the interconnect question alone.
+  Not pursued for now.
 
 ## Wireless (RF) receiver visibility
 
@@ -121,24 +219,34 @@ Vista panel keypad bus (4-wire ECP)
         │  (non-isolated resistor-divider + opto/transistor interface,
         │   shares ground with panel — same as a real keypad)
         ▼
-   RP2040 (Pico)  ── bit-bang ECP, emulate a virtual keypad address,
-        │            scan pulse-slot 3 for in-use keypad addresses
-        │  USB serial, text protocol (firmware/SERIAL_PROTOCOL.md)
+   RP2040-Zero  ── bit-bang ECP, emulate a virtual keypad address,
+        │           scan pulse-slot 3 for in-use keypad addresses
+        │  Hardware UART (TX/RX crossed + shared GND), text protocol
+        │  (firmware/SERIAL_PROTOCOL.md) — same protocol as the original
+        │  USB-serial design, only the transport changed
         ▼
-   Raspberry Pi 4 (8GB)  ── vista_tool Python backend, safety rules,
-        │                    industrial microSD for logging
-        │  WebSocket / HTTP, over WiFi (client or AP-mode hotspot) or Ethernet
-        ├──────────────► On-device touchscreen (local kiosk view)
-        └──────────────► Remote browser on a tech's laptop/phone (same UI,
-                          same live scan/log data, concurrent sessions OK)
+   Raspberry Pi 4, 8GB (interim — Pi Zero 2 W is the target board)
+        │  vista_tool Python backend, safety rules,
+        │  industrial microSD for logging
+        │  WebSocket / HTTP, over WiFi only (2.4GHz)
+        ▼
+   AP mode (default, own hotspot) ──or── STA mode (joined to site WiFi;
+   falls back to AP after a 5-minute connect timeout)
+        │
+        └──────────────► Any browser (tech's laptop or phone) — device is
+                          headless, no local display; concurrent sessions OK
 
-   USB-C external power ── [ISOLATED DC-DC / charge module] ── battery + Pi/Pico rails
-        (ground-loop protection lives here now, not on the bus interface)
+   5V/GND off the Pi header ── RP2040-Zero onboard regulator (powers the
+        coprocessor directly, no separate supply needed)
+
+   USB-C external power ── [ISOLATED DC-DC / charge module] ── battery + Pi rail
+        (ground-loop protection lives here, not on the bus interface;
+         RP2040-Zero's own USB-C port is now free for flashing/debug only)
 ```
 
 ## Resolved items (previously open)
 
-1. ~~Confirm the Pico's virtual keypad address won't collide with existing
+1. ~~Confirm the RP2040's virtual keypad address won't collide with existing
    keypads/modules~~ — resolved procedurally, not technically: this follows
    standard technician SOP (identify the in-use address, disconnect the
    field keypad, take its address), which the tool actively supports via
@@ -148,8 +256,23 @@ Vista panel keypad bus (4-wire ECP)
    isolated power path, not a fully isolated bus interface. See "Isolation
    strategy" section above for the reasoning.
 3. ~~Display size~~ — 10.1in HDMI+USB-touch, kiosk/kickstand form factor, see
-   BOM above.
+   BOM above. **Superseded** — see item 8 below: the display was dropped
+   entirely and the device is now headless.
 4. ~~Display model~~ — GeeekPi 10.1in 1280x800, see BOM above.
+   **Superseded** — see item 8 below.
+5. ~~Compute board~~ — Pi Zero 2 W remains the target but is unobtainable
+   during the 2026 shortage; Raspberry Pi 4 decided as the interim/dev
+   board (user has several on hand), built to stay Zero-2W-compatible. See
+   "Compute board: Pi 4 now, Zero 2 W target" above.
+6. ~~Bus coprocessor~~ — Waveshare RP2040-Zero decided (ordered),
+   replacing the Pico. See "Bus coprocessor: RP2040-Zero" above.
+7. ~~RP2040 <-> Pi interconnect~~ — hardware UART over the GPIO header
+   decided, replacing USB-serial. See "RP2040-Zero <-> Pi interconnect"
+   above.
+8. ~~Display~~ — reversed from the previously decided 10.1in HDMI+USB-touch
+   kiosk display to no physical display at all; the device is fully
+   headless, interacted with exclusively via browser. See BOM above and
+   `CONCEPT.md` "Networking".
 
 ## Still open
 
@@ -186,18 +309,28 @@ Vista panel keypad bus (4-wire ECP)
      transistor's base resistor. Needs two distinct GPIOs — GPIO_26 stays
      as the Yellow input, base-drive moves to GPIO_27 (or a third pin, if
      read-back of the RP2040's own drive on the Green line is wanted for
-     collision/arbitration sensing).
+     collision/arbitration sensing). **Fold this into the RP2040-Zero pin
+     remap** (see "Bus coprocessor: RP2040-Zero" above) rather than fixing
+     it on the old Pico pinout — the interface circuit and voltage findings
+     above are unaffected by the board swap, only the GPIO numbers are.
 2. **Battery capacity** — deliberately left undecided, and not needed
    during the development/testing phase — the build will run on isolated
    wall power (via the isolated USB-C/DC-DC charge path already in the
    BOM) until hardware is confirmed working. Config (1S2P) is settled;
    final mAh waits on real enclosure dimensions once the user's case design
-   is further along. Minimum requirement once it matters: 2 hours (average
-   service call duration) on battery alone. See BOM row above for the
-   runtime math and the assistant's margin recommendation.
+   is further along, **and** on retesting power draw on actual Pi Zero 2 W
+   hardware — any measurements taken on the Pi 4 interim board are not
+   valid for Zero 2 W sizing (see "Compute board" above). Minimum
+   requirement once it matters: 2 hours (average service call duration) on
+   battery alone. See BOM row above for the runtime math and the
+   assistant's margin recommendation.
 3. **Concurrent-write safety at the protocol/firmware level** — the
    product decision is "concurrent sessions are fine" (multiple viewers OK,
    including while a scan/write is in progress), so this is about the
    RP2040/backend correctly serializing actual keystroke sends to the panel
    regardless of how many UI clients are connected, not about restricting
    who can watch or click.
+4. **AP/STA switching mechanism** — implementation choice (hostapd +
+   wpa_supplicant + a watchdog script vs. NetworkManager vs. RaspAP) for
+   the boot-into-AP / attempt-STA / 5-minute-timeout-fallback behavior
+   described in `CONCEPT.md` "Networking". Deferred, not blocking.
