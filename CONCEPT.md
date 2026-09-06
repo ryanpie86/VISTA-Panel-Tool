@@ -15,9 +15,14 @@ serves two roles, not one:
 1. **Portable programming tool** — carried to a panel, connected to the
    ECP bus, used to read (and eventually write) configuration: zone types,
    zone names, and beyond.
-2. **Stationary datalogger** — can be left connected and powered at a panel
-   for extended unattended periods (overnight or longer) for
-   troubleshooting, reachable remotely the whole time.
+2. **Permanent installation / Home Automation Mode** — can be left
+   connected and powered at a panel indefinitely, not just for overnight
+   troubleshooting. Once ECP read-mode is solid on the RP2040, this is an
+   accelerated (not deferred) feature: a UI-selectable mode where the same
+   hardware that reads zones today doubles as a full-time replacement for
+   an Envisalink module, publishing live panel state and accepting
+   commands for a Home Assistant plugin (or a debug/test session) to
+   connect to — see "Live monitoring / Home Automation Mode" below.
 
 Both roles run on the same hardware and the same software — there's no
 separate "logger mode" device, just the same tool used differently.
@@ -127,9 +132,12 @@ its safety rules intact (see `VISTA_ZONE_DISCOVERY_PROTOCOL_NOTES.md`).
 
 **Write is deferred — an add-on feature, not near-term work.** The
 priority order is: get the hardware (RP2040) built and confirmed
-operating, and get ECP *reading* working end-to-end on that hardware,
-before write-mode is touched at all. Write is still understood as the
-eventual mirror-image operation — navigating to the same menus/fields but
+operating, get ECP *reading* working end-to-end on that hardware, and
+build live monitoring / Home Automation Mode (see "Live monitoring / Home
+Automation Mode" below — accelerated ahead of write-mode since it needs no
+new protocol research) before write-mode is touched at all. Write is still
+understood as the eventual mirror-image operation — navigating to the same
+menus/fields but
 entering new values instead of just reading, with a symmetric verify
 pattern (re-read after any write using the existing read mechanism, rather
 than trusting the write blind) — but none of that starts until hardware
@@ -171,6 +179,74 @@ explicitly deferred until the ECP read/write utility is solid; the hardware
 is meant to leave room for these as future add-on interface modules rather
 than being redesigned for them later (see HARDWARE_ARCHITECTURE.md
 "Modularity" section).
+
+## Live monitoring / Home Automation Mode (accelerated)
+
+**Committed scope, accelerated ahead of write-mode** — this needs no new
+protocol knowledge and no new hardware beyond the RP2040 already planned
+for read-mode, so it doesn't have to wait behind write-mode's harder,
+undocumented keystroke-sequence work. Priority order is now:
+
+1. Get ECP read-mode solid on real RP2040 hardware (already the #1
+   priority, unchanged).
+2. **Live monitoring / Home Automation Mode** (this section) —
+   straightforward extension of what read-mode already builds.
+3. Write-mode — still deferred behind both of the above; still needs new
+   protocol research (see "Software scope: read/write").
+
+**The UI feature: Home Automation Mode.** A mode a tech switches on from
+the web UI (alongside Zone Discovery / Write Configuration / Reports on
+the Tools menu) that puts the device into a permanently-connected state
+instead of one-shot scans: it holds the keypad address continuously and
+exposes live panel state + control over IP for a companion consumer to
+connect to. Two concrete uses, both served by the same mode:
+
+1. **A Home Assistant integration** — a separate plugin/custom component
+   (its own codebase, not part of this repo, likely following the pattern
+   `envisalink_new` already established for Envisalink) connects over IP,
+   receives live state, and sends commands, registering with HA as an
+   "Alarm Panel" integration entity the same way an Envisalink-backed
+   integration does today.
+2. **Debug/test sessions** — leaving the device connected to a bench panel
+   during development, watching live bus activity without re-running a
+   scan. This alone is enough reason to build this ahead of write-mode:
+   it's useful the moment ECP read-mode exists, before any HA plugin does.
+
+**What "more granular than Envisalink" means here:** scope is ECP-bus data
+only — no new sensing hardware, no zone-terminal voltage/resistance taps
+(that idea remains the separate, still-deferred "general I/O" item below,
+not pulled forward by this decision). The granularity gain is about how
+much of the *bus* gets exposed, not additional physical inputs. An
+Envisalink's TPI interface sits on the bus as a virtual keypad and
+publishes a filtered subset of what it sees — zone/partition status bits
+and commands shaped by its own schema. This tool's RP2040 sits on the bus
+the exact same way (same virtual-keypad mechanism `zone_discovery.py`
+already uses for the *56/*82 walk), so it can publish more of what's
+actually on the wire: the raw keypad alpha-display stream and per-zone/
+per-partition state changes as they happen, not just whatever subset TPI's
+schema chose to model. (This is the wired-bus counterpart to "Wireless
+(RF) zone visibility" below, which covers the separate, still-unbuilt
+wireless-receiver-decode angle on "more granular than Envisalink.")
+
+**How it's built:** reuses the existing transport abstraction
+(`PanelTransport`, `KeypadUpdate`, `wait_for_display`/`last_update`) as-is
+— no new hardware-facing protocol work. Where `zone_discovery.py` drives
+the walk once per scan, Home Automation Mode is the same primitives run
+continuously: watch the keypad display stream, parse it into
+zone/partition state changes and expose them (and accept arm/disarm and
+other keystroke commands) as a standing service instead of a one-shot
+scan. Concrete wire format is still open — a WebSocket event stream is the
+obvious first cut (matches the existing scan WebSocket); MQTT is a natural
+alternative for a Home Assistant plugin to consume, but isn't committed
+yet (see "Open threads").
+
+**Concurrency**: enabling Home Automation Mode holds the keypad address
+continuously, the same as the panel would see a real keypad permanently
+installed. Any read-mode scan or future write-mode session run at the same
+time needs the same keystroke-serialization the backend already owes
+concurrent UI clients (see "Open threads" item on concurrency) — this
+doesn't add a new problem, just another caller into that same
+serialization point.
 
 ## Wireless (RF) zone visibility — datalogger role
 
@@ -274,6 +350,18 @@ Carried forward from earlier discussion, still unresolved:
    wpa_supplicant + a watchdog script vs. NetworkManager vs. RaspAP) for
    the boot-into-AP / attempt-STA / 5-minute-timeout-fallback behavior in
    "Networking" above. Deferred, not blocking.
+10. **Home Automation Mode wire format** — WebSocket event stream is the
+    likely first cut (matches the existing scan WebSocket); MQTT is a
+    natural alternative for a Home Assistant plugin to consume, but isn't
+    committed yet. Needs deciding once this is actually being built.
+11. **Home Automation Mode event granularity** — exactly which derived
+    events to publish (per-zone open/close, per-partition
+    armed/disarmed/alarm, raw alpha-display text, or all three) still
+    needs deciding against real captured panel behavior, same care as the
+    *56/*82 parsing corrections.
+12. **Home Assistant plugin itself** — a separate codebase/deliverable
+    (custom component consuming whatever wire format item 10 settles on),
+    not part of this repo; not started.
 
 ## Resolved since first written
 
