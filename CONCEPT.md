@@ -33,7 +33,9 @@ separate "logger mode" device, just the same tool used differently.
   the actual target board but is unobtainable during the ongoing 2026
   shortage (other small boards were evaluated and rejected) — paired with
   a Waveshare RP2040-Zero coprocessor (replacing the Pico) for real-time
-  ECP bus timing, linked over hardware UART rather than USB-serial.
+  ECP bus timing, linked over USB-serial (a UART-over-GPIO-header plan was
+  tried and reverted once remote firmware flashing from the Pi came into
+  scope — see HARDWARE_ARCHITECTURE.md "RP2040-Zero <-> Pi interconnect").
   Android-tablet and fully-custom-tablet alternatives were both considered
   and rejected early on: Android would require sideloading/rooting to get
   serial access to custom hardware, which the user doesn't want; a fully
@@ -345,17 +347,23 @@ Carried forward from earlier discussion, still unresolved:
    wpa_supplicant + a watchdog script vs. NetworkManager vs. RaspAP) for
    the boot-into-AP / attempt-STA / 5-minute-timeout-fallback behavior in
    "Networking" above. Deferred, not blocking.
-9. **Home Automation Mode wire format** — WebSocket event stream is the
+9. **Remote firmware-flashing mechanism** — the RP2040-Zero stayed on
+   USB-serial specifically so the Pi can push new firmware without
+   physical access (see HARDWARE_ARCHITECTURE.md "RP2040-Zero <-> Pi
+   interconnect"), but the exact trigger (custom serial command vs.
+   Arduino-Pico's built-in auto-reset convention) and whether to add a
+   hardware BOOTSEL/RESET fallback for a bricked board are still open.
+10. **Home Automation Mode wire format** — WebSocket event stream is the
    likely first cut (matches the existing scan WebSocket); MQTT is a
    natural alternative for a Home Assistant plugin to consume, but isn't
    committed yet. Needs deciding once this is actually being built.
-10. **Home Automation Mode event granularity** — exactly which derived
+11. **Home Automation Mode event granularity** — exactly which derived
     events to publish (per-zone open/close, per-partition
     armed/disarmed/alarm, raw alpha-display text, or all three) still
     needs deciding against real captured panel behavior, same care as the
     *56/*82 parsing corrections.
-11. **Home Assistant plugin itself** — a separate codebase/deliverable
-    (custom component consuming whatever wire format item 9 settles on),
+12. **Home Assistant plugin itself** — a separate codebase/deliverable
+    (custom component consuming whatever wire format item 10 settles on),
     not part of this repo; not started.
 
 ## Resolved since first written
@@ -380,14 +388,16 @@ Carried forward from earlier discussion, still unresolved:
   "Compute board: Pi 4 now, Zero 2 W target".
 - **Bus coprocessor**: Waveshare RP2040-Zero decided, replacing the Pico.
   See HARDWARE_ARCHITECTURE.md "Bus coprocessor: RP2040-Zero".
-- **RP2040 <-> Pi interconnect**: hardware UART over the GPIO header
-  decided, replacing USB-serial. See HARDWARE_ARCHITECTURE.md
-  "RP2040-Zero <-> Pi interconnect".
+- **RP2040 <-> Pi interconnect**: hardware UART over the GPIO header was
+  decided, then reverted back to USB-serial once remote firmware flashing
+  from the Pi came into scope — flashing needs USB (or SWD) regardless, so
+  UART stopped saving anything and just added a second connection. See
+  HARDWARE_ARCHITECTURE.md "RP2040-Zero <-> Pi interconnect".
 - **RP2040-Zero / ECP interface pin mapping**: finalized against the
   board's actual pinout diagram (Yellow=GP26, Green=GP27, Green
-  bus-monitor tap=GP28, UART0 TX/RX=GP0/GP1, WS2812 LED fixed on GP16),
-  resolving the old GPIO_26 dual-assignment conflict. See
-  HARDWARE_ARCHITECTURE.md "Bus coprocessor: RP2040-Zero".
+  bus-monitor tap=GP28, WS2812 LED fixed on GP16), resolving the old
+  GPIO_26 dual-assignment conflict. See HARDWARE_ARCHITECTURE.md "Bus
+  coprocessor: RP2040-Zero".
 - **ESP32-as-host** (replacing the Pi entirely): considered and set
   aside — electrically viable over SPI, but would mean porting the entire
   backend to embedded C, a much bigger lift than deciding the RP2040↔Pi
