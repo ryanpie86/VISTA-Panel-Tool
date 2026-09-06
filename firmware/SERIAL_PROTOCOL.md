@@ -3,11 +3,14 @@
 The RP2040 owns everything time-critical on the ECP bus (bit-level pulse
 timing, per-device address slots, framing) -- adapted from the
 interrupt-driven ECP library in `Dilbert66/esphome-vistaECP` (that project
-already documents a stock RP2040 Pico pinout: RX/yellow=GPIO21, TX/green=GPIO20,
-monitor=GPIO18, using the same non-isolated resistor-divider + transistor
-bus-interface circuit as its ESP32 build). The Pi never touches bus timing --
-it only sees a simple newline-delimited text protocol over USB serial
-(115200 8N1), intentionally shaped like the Envisalink TPI lines so the same
+only documents ESP8266/ESP32 pin assignments; this build's own Waveshare
+RP2040-Zero pinout is finalized separately -- Yellow=GP26, Green=GP27,
+Green bus-monitor tap=GP28, using the same non-isolated resistor-divider +
+transistor bus-interface circuit as esphome-vistaECP's ESP32 build, see
+`HARDWARE_ARCHITECTURE.md` "Bus coprocessor: RP2040-Zero"). The Pi never
+touches bus timing -- it only sees a simple newline-delimited text protocol
+over hardware UART (GP0/GP1 on the RP2040-Zero, GPIO14/15 on the Pi;
+115200 8N1), intentionally shaped like the Envisalink TPI lines so the same
 `PushUpdatePollingTransport` base class and the same zone_discovery walk
 logic work unmodified against either transport.
 

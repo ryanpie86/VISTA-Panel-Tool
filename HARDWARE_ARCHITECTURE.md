@@ -91,11 +91,11 @@ swap-over time:
 
 **Decided:** Waveshare RP2040-Zero (ordered), replacing the Pico. Same
 RP2040 silicon, so the firmware/SDK is unaffected, but the physical pinout
-differs from the Pico — esphome-vistaECP's Pico-based pin assignments in
-the current schematic must be remapped pin-by-pin against the RP2040-Zero's
-actual layout, not assumed. Doing that remap is also the opportunity to fix
-the existing GPIO_26 dual-assignment conflict noted under "Still open"
-below, rather than patching it separately on the old Pico pinout.
+differs from the Pico — esphome-vistaECP's Pico-based pin assignments
+don't carry over unchanged. See "RP2040-Zero pin assignments (finalized)"
+below for the actual remap, which also resolves the old GPIO_26
+dual-assignment conflict as part of the same pass rather than patching it
+separately on the old Pico pinout.
 
 Two other physical differences worth planning around:
 
@@ -108,6 +108,21 @@ Two other physical differences worth planning around:
   (if ever needed beyond the serial/UART link) means hand-wiring probes to
   those pads.
 
+### RP2040-Zero pin assignments (finalized)
+
+Confirmed against the Waveshare RP2040-Zero's actual pinout diagram — the
+ADC-capable pins (GP26-29) are broken out on this board, resolving the
+"verify these exist before wiring" caution this doc previously carried.
+
+| Signal | Pin | Notes |
+|---|---|---|
+| Yellow (panel TX → RP2040 RX, through the 33K/10K divider) | **GP26** (ADC0) | Digital input mode |
+| Green (RP2040 TX → panel, drives the NPN base) | **GP27** (ADC1) | Digital output — resolves the old GPIO_26 dual-assignment conflict |
+| Green bus-monitor tap (separate divider, per esphome-vistaECP's `MONITORTX` feature) | **GP28** (ADC2) | Digital input — passively decodes *other* devices' traffic on Green (other keypads, zone expanders, RF receiver modules) that the RP2040 wouldn't otherwise see; not collision detection on the RP2040's own TX. Feeds the future "Wireless (RF) zone visibility" / datalogger-role work in `CONCEPT.md`, not required for near-term ECP read/write |
+| UART0 TX (to Pi) | **GP0** | See "RP2040-Zero <-> Pi interconnect" below |
+| UART0 RX (from Pi) | **GP1** | See "RP2040-Zero <-> Pi interconnect" below |
+| Status LED (WS2812) | **GP16**, internal | Hardwired on-board, not a header pin — nothing to wire |
+
 ## RP2040-Zero <-> Pi interconnect: UART, not USB-serial
 
 **Decided:** the RP2040-Zero talks to the Pi over hardware UART on the
@@ -115,10 +130,14 @@ GPIO header instead of USB-serial. The protocol itself is unchanged — the
 plain-text command/response format in `firmware/SERIAL_PROTOCOL.md` is
 the same either way, only the transport changes.
 
-Wiring: TX→RX and RX→TX crossed, plus a shared GND (3 signal wires), plus a
-separate 5V+GND pair off the Pi's header to power the RP2040-Zero directly
-(it has an onboard regulator, so raw 5V-in is fine). Both boards are 3.3V
-logic, so no level shifting is needed.
+Wiring, confirmed against the RP2040-Zero's actual pinout diagram: RP2040
+GP0 (UART0 TX) → Pi GPIO15/RXD (physical pin 10), RP2040 GP1 (UART0 RX) →
+Pi GPIO14/TXD (physical pin 8) — crossed, plus a shared GND (3 signal
+wires). GP0/GP1 sit right next to the board's 5V/GND/3V3 cluster, so the
+same short run also carries the separate 5V+GND pair that powers the
+RP2040-Zero directly off the Pi header (it has an onboard regulator, so
+raw 5V-in is fine). Both boards are 3.3V logic, so no level shifting is
+needed.
 
 Required changes to make this work:
 
@@ -129,12 +148,9 @@ Required changes to make this work:
   `raspi-config` → Interface Options → Serial Port (login shell: **No**,
   hardware: **Yes**) so the UART is free for the RP2040 link instead of a
   getty.
-- **Firmware side:** swap `stdio_usb`/`Serial` (USB) for the hardware UART
-  peripheral (`uart0`/`uart1`, or `Serial1` in Arduino-Pico) in the
-  RP2040-Zero firmware. No change to the protocol/parsing logic itself.
-- **Caution:** confirm the RP2040-Zero's actual UART pin locations against
-  its real pinout diagram before wiring — don't assume the Pico's pin
-  numbers carry over along with the pin remap work above.
+- **Firmware side:** swap `stdio_usb`/`Serial` (USB) for hardware UART0
+  (GP0/GP1, `Serial1` in Arduino-Pico) in the RP2040-Zero firmware. No
+  change to the protocol/parsing logic itself.
 
 Side benefit: this frees the RP2040-Zero's USB-C port entirely for
 firmware flashing and debugging, separate from the operational data link —
@@ -273,6 +289,18 @@ Vista panel keypad bus (4-wire ECP)
    kiosk display to no physical display at all; the device is fully
    headless, interacted with exclusively via browser. See BOM above and
    `CONCEPT.md` "Networking".
+9. ~~RP2040-Zero pin mapping~~ — finalized against the board's actual
+   pinout diagram: Yellow=GP26, Green=GP27, Green bus-monitor tap=GP28,
+   UART0 TX/RX=GP0/GP1 to the Pi, WS2812 status LED fixed internally on
+   GP16. Resolves the old GPIO_26 dual-assignment conflict as part of the
+   remap, per the plan. The bus-monitor tap (GP28) was initially proposed
+   as collision/arbitration sensing on the RP2040's own TX, but checking
+   esphome-vistaECP's own README showed its actual purpose is passively
+   decoding *other* devices' traffic on Green (keypads, zone expanders, RF
+   receiver modules) via their `MONITORTX` feature — kept for that reason
+   (feeds the future RF/zone-expander visibility work), not for
+   self-collision detection. See "Bus coprocessor: RP2040-Zero" above for
+   the full pin table.
 
 ## Still open
 
@@ -316,15 +344,6 @@ Vista panel keypad bus (4-wire ECP)
      alternative, for which they don't publish exact component values, so
      that part of the design remains ours to pin down, not a deviation
      from a documented reference.)
-   - **Draft interface schematic has a pin conflict**: GPIO_26 was labeled
-     as both the Yellow-line input and the driver for the Green-line
-     transistor's base resistor. Needs two distinct GPIOs — GPIO_26 stays
-     as the Yellow input, base-drive moves to GPIO_27 (or a third pin, if
-     read-back of the RP2040's own drive on the Green line is wanted for
-     collision/arbitration sensing). **Fold this into the RP2040-Zero pin
-     remap** (see "Bus coprocessor: RP2040-Zero" above) rather than fixing
-     it on the old Pico pinout — the interface circuit and voltage findings
-     above are unaffected by the board swap, only the GPIO numbers are.
 2. **Battery capacity** — deliberately left undecided, and not needed
    during the development/testing phase — the build will run on isolated
    wall power (via the isolated USB-C/DC-DC charge path already in the

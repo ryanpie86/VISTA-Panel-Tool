@@ -327,40 +327,35 @@ Carried forward from earlier discussion, still unresolved:
 4. **Concurrency at the firmware/backend level** — serializing real
    keystroke sends when multiple UI clients are connected, now that
    concurrent viewing is confirmed to be fine at the product level.
-5. **RP2040-Zero / ECP interface pin mapping** — esphome-vistaECP's
-   reference schematics only document ESP8266/ESP32 pin assignments (the
-   Pico-based mapping this project inherited needs remapping anyway now
-   that the RP2040-Zero has a different physical pinout — see
-   HARDWARE_ARCHITECTURE.md "Bus coprocessor: RP2040-Zero"). Will be done
-   pin-by-pin, including the GPIO_26 fix, once the board is in hand and the
-   UART interconnect wiring (see HARDWARE_ARCHITECTURE.md) is settled
-   alongside it.
-6. **PDF report export** — CSV export from a saved scan exists; PDF is the
+5. **PDF report export** — CSV export from a saved scan exists; PDF is the
    deferred half of the "Reports" tool entry.
-7. **Reload a saved scan into a write-mode editor** — depends on write-mode
+6. **Reload a saved scan into a write-mode editor** — depends on write-mode
    existing at all (see item 3); the CSV `Save` output is meant to be that
    editor's eventual input format.
-8. **Wireless receiver (RF) decode firmware** — see "Wireless (RF) zone
+7. **Wireless receiver (RF) decode firmware** — see "Wireless (RF) zone
    visibility" above. Confirmed by testing that the EVL4/TPI path can't
    surface this data, and that AD2-style raw receiver-broadcast decoding
    would need to be added explicitly to the RP2040 firmware (not inherited
    for free from the non-isolated bus tap). Relevant to the stationary
    datalogger role; not part of near-term zone-discovery/read-write scope.
-9. **AP/STA switching mechanism** — implementation choice (hostapd +
+   The RP2040-Zero's Green bus-monitor tap (GP28, see
+   HARDWARE_ARCHITECTURE.md "Bus coprocessor: RP2040-Zero") is the wiring
+   this would build on, per esphome-vistaECP's own `MONITORTX` feature.
+8. **AP/STA switching mechanism** — implementation choice (hostapd +
    wpa_supplicant + a watchdog script vs. NetworkManager vs. RaspAP) for
    the boot-into-AP / attempt-STA / 5-minute-timeout-fallback behavior in
    "Networking" above. Deferred, not blocking.
-10. **Home Automation Mode wire format** — WebSocket event stream is the
-    likely first cut (matches the existing scan WebSocket); MQTT is a
-    natural alternative for a Home Assistant plugin to consume, but isn't
-    committed yet. Needs deciding once this is actually being built.
-11. **Home Automation Mode event granularity** — exactly which derived
+9. **Home Automation Mode wire format** — WebSocket event stream is the
+   likely first cut (matches the existing scan WebSocket); MQTT is a
+   natural alternative for a Home Assistant plugin to consume, but isn't
+   committed yet. Needs deciding once this is actually being built.
+10. **Home Automation Mode event granularity** — exactly which derived
     events to publish (per-zone open/close, per-partition
     armed/disarmed/alarm, raw alpha-display text, or all three) still
     needs deciding against real captured panel behavior, same care as the
     *56/*82 parsing corrections.
-12. **Home Assistant plugin itself** — a separate codebase/deliverable
-    (custom component consuming whatever wire format item 10 settles on),
+11. **Home Assistant plugin itself** — a separate codebase/deliverable
+    (custom component consuming whatever wire format item 9 settles on),
     not part of this repo; not started.
 
 ## Resolved since first written
@@ -388,6 +383,11 @@ Carried forward from earlier discussion, still unresolved:
 - **RP2040 <-> Pi interconnect**: hardware UART over the GPIO header
   decided, replacing USB-serial. See HARDWARE_ARCHITECTURE.md
   "RP2040-Zero <-> Pi interconnect".
+- **RP2040-Zero / ECP interface pin mapping**: finalized against the
+  board's actual pinout diagram (Yellow=GP26, Green=GP27, Green
+  bus-monitor tap=GP28, UART0 TX/RX=GP0/GP1, WS2812 LED fixed on GP16),
+  resolving the old GPIO_26 dual-assignment conflict. See
+  HARDWARE_ARCHITECTURE.md "Bus coprocessor: RP2040-Zero".
 - **ESP32-as-host** (replacing the Pi entirely): considered and set
   aside — electrically viable over SPI, but would mean porting the entire
   backend to embedded C, a much bigger lift than deciding the RP2040↔Pi
