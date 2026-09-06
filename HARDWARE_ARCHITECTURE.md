@@ -294,16 +294,28 @@ Vista panel keypad bus (4-wire ECP)
      RP2040 considerably more timing slack than assumed — worth confirming
      with a couple more captures, but a good sign for firmware margin.
    - Divider math confirmed against real levels: 13.0V × (3.3k/13.3k) ≈
-     3.2V, matching the interface circuit's own design target.
-   - **Two follow-ups before finalizing R1/R2 values:** (a) the Yellow
+     3.2V, matching the interface circuit's own design target at the time.
+   - **One follow-up before finalizing R1/R2 values:** the Yellow
      (TX-from-panel) line — the one actually feeding the RP2040 GPIO — still
      needs a clean full-scale capture; the only capture taken so far was
-     misconfigured at 100mV/div on a 13V line and came out clipped. (b) At
-     worst-case AUX spec (13.8-14V vs. the ~13V measured on this bench),
-     the divider output approaches ~3.4-3.5V against the RP2040's ~3.6V
-     GPIO absolute max — thin margin for a tool that'll see other panels
-     in the field. Recommend either tightening the divider ratio (e.g. R2
-     → 2.2k) or adding a small clamp diode to 3.3V for insurance.
+     misconfigured at 100mV/div on a 13V line and came out clipped.
+   - **Divider ratio revised to match esphome-vistaECP's own published
+     values**, resolving the worst-case-AUX margin concern this doc
+     previously flagged: at 13.8-14V AUX, the original ~10K/3.3K ratio
+     (≈25%) put the GPIO at ~3.4-3.5V — thin against the RP2040's 3.6V
+     absolute max. Their recommended non-isolated "simple version"
+     schematic uses **33K (series) / 10K (to GND)** on this same line
+     (≈23% ratio) — close in class, but their field-proven number, landing
+     at ~3.0-3.1V across the normal 13.0-13.2V range and only ~3.2-3.3V at
+     worst-case AUX. **Adopt 33K/10K for R1/R2** rather than the earlier
+     "tighten to ~2.2K" guess or a clamp diode — neither is needed once the
+     ratio itself matches theirs. (Their schematic also confirms the
+     Green/TX line in their default circuit is driven through a 4N35
+     optocoupler + 180Ω resistor, not a transistor — the transistor variant
+     this project uses is their separately-mentioned optocoupler-free
+     alternative, for which they don't publish exact component values, so
+     that part of the design remains ours to pin down, not a deviation
+     from a documented reference.)
    - **Draft interface schematic has a pin conflict**: GPIO_26 was labeled
      as both the Yellow-line input and the driver for the Green-line
      transistor's base resistor. Needs two distinct GPIOs — GPIO_26 stays
