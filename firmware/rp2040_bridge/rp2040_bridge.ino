@@ -129,16 +129,26 @@ void setup() {
     // give the USB-CDC enumeration a couple seconds; don't hang forever if
     // nothing is listening yet.
   }
+  Serial.println("BOOT: serial up");
 
 #if defined(ARDUINO_ARCH_RP2040)
   statusPixel.begin();
   setStatusColor(0, 0, 32);  // dim blue: bringing up the bus
+  Serial.println("BOOT: status LED up");
 #endif
 
+  Serial.println("BOOT: calling vista.begin()");
   vista.begin(PIN_YELLOW_RX, PIN_GREEN_TX, (char)KEYPAD_ADDR, PIN_GREEN_MON);
+  Serial.println("BOOT: vista.begin() returned, entering loop()");
 }
 
 void loop() {
+  static unsigned long lastHeartbeatMs = 0;
+  if (millis() - lastHeartbeatMs > 2000) {
+    Serial.println("ALIVE");
+    lastHeartbeatMs = millis();
+  }
+
   vista.handle();
 
   static String rxLine;
