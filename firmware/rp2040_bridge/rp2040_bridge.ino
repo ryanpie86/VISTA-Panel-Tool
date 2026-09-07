@@ -153,15 +153,25 @@ static uint32_t framesDecodedCount = 0;  // any cmdAvail() drain, any frame type
 static uint32_t cntF0 = 0, cntF7Seen = 0, cntF7Valid = 0, cntF6 = 0, cntF9 = 0,
                  cntFA = 0, cntF2 = 0, cntF8 = 0, cntFB = 0, cntOther = 0;
 
+// Bench diagnostic: cumulative count of SoftwareSerial::overflow() going
+// true. Polled every loop() iteration since the underlying flag is
+// sticky-and-clear-on-read (Vista::rxOverflow() -> SoftwareSerial::
+// overflow()) -- catches whether the ISR-filled ring buffer is outrunning
+// how often the main-loop-driven readChars() drains it, which would show
+// up as exactly the kind of mid-frame truncation seen on long F7 reads.
+static uint32_t rxOverflowCount = 0;
+
 void loop() {
   static unsigned long lastHeartbeatMs = 0;
   if (millis() - lastHeartbeatMs > 2000) {
 #if defined(ARDUINO_ARCH_RP2040)
     Serial.println("ALIVE rxEdges=" + String(rxEdgeCountRP2040) +
                     " txEdges=" + String(txEdgeCountRP2040) +
-                    " framesDecoded=" + String(framesDecodedCount));
+                    " framesDecoded=" + String(framesDecodedCount) +
+                    " rxOverflow=" + String(rxOverflowCount));
 #else
-    Serial.println("ALIVE framesDecoded=" + String(framesDecodedCount));
+    Serial.println("ALIVE framesDecoded=" + String(framesDecodedCount) +
+                    " rxOverflow=" + String(rxOverflowCount));
 #endif
     Serial.println("STATS F0=" + String(cntF0) + " F7seen=" + String(cntF7Seen) +
                     " F7valid=" + String(cntF7Valid) + " F6=" + String(cntF6) +
@@ -170,6 +180,8 @@ void loop() {
                     " FB=" + String(cntFB) + " other=" + String(cntOther));
     lastHeartbeatMs = millis();
   }
+
+  if (vista.rxOverflow()) rxOverflowCount++;
 
   vista.handle();
 
