@@ -1329,22 +1329,10 @@ void IRAM_ATTR Vista::rxHandleISR()
   else
   {
 
-#if defined(USE_RP2040)
-    // See _f7LongReadActive's declaration in vista.h: skip this timeout
-    // while the main thread is actively polling for the current F7
-    // frame's bytes, since this ISR's own edge timing is exactly what
-    // bench testing showed becoming unreliable under bus load -- the
-    // same failure mode PIO exists to work around for byte data.
-    if (_highTime && micros() - _highTime > 6000 && _rxState == sNormal && !_f7LongReadActive) {
-
-      _rxState = sPolling;
-    }
-#else
     if (_highTime && micros() - _highTime > 6000 && _rxState == sNormal) {
 
       _rxState = sPolling;
     }
-#endif
     if (_rxState == sCmdHigh) // end 2400 baud cmd preamble
       _rxState = sNormal;
 
@@ -1360,11 +1348,27 @@ void IRAM_ATTR Vista::rxHandleISR()
   // individual "_rxState = X" assignment site, so every transition path
   // (there are a few) is covered by one check instead of needing to
   // remember to add this at each one.
+  //
+  // Bench evidence (F7 long reads consistently capturing zero bytes
+  // beyond the opcode, 100% of attempts) traced to the _lowTime > 9000
+  // branch above (the bus's ~9ms+ ACK-opportunity slot): it
+  // unconditionally forces _rxState = sPolling regardless of what state
+  // we were in, and on a live bus that slot recurs often enough to land
+  // within the first few ms of essentially every F7 payload, killing PIO
+  // before a second byte can arrive. That branch also does real ACK-TX
+  // work this comment must not touch, and _rxState itself has other
+  // consumers, so instead of changing what _rxState becomes, only the
+  // PIO on/off *decision* is overridden here while _f7LongReadActive
+  // (see its declaration in vista.h) says the main thread is actively
+  // polling for this frame's bytes -- any _rxState excursion away from
+  // sNormal during that window is treated as incidental, not a real
+  // end-of-frame.
   {
     static char lastRxStateForPio = -1;
     if (_rxState != lastRxStateForPio)
     {
-      pioRxSetActive(_rxState == sNormal);
+      bool wantPioActive = (_rxState == sNormal) || _f7LongReadActive;
+      pioRxSetActive(wantPioActive);
       lastRxStateForPio = _rxState;
     }
   }
