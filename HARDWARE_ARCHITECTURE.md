@@ -405,20 +405,28 @@ Vista panel keypad bus (4-wire ECP)
      table above updated: Green=GP26 (divider), Yellow=GP27 (transistor),
      Yellow=GP28 (bus-monitor tap, since Yellow is the shared line other
      keypads/RF modules would also transmit on).
-   - **Open follow-up from the swap:** the 33K/10K divider margin math
-     above was validated against Green's *original* pre-RP2040 idle-high
-     reading (~13.0-13.2V) and the assumed 13.8-14V worst-case AUX — not
-     against Yellow's newly-confirmed 13.8V (Yellow doesn't feed the
-     divider; it only needs to stay within Q1's Vceo, already confirmed
-     fine with huge margin). The divider-margin conclusion still needs a
-     clean, trustworthy full-scale capture of Green specifically to be
-     fully confirmed on this bench — same open item as above, now with a
-     working method (Keypad Lockout) to get it.
-   - **Before soldering headers and going physically live:** a few more
-     scope captures planned — the still-outstanding clean Green full-scale
-     capture (now via the Keypad Lockout method), plus a re-check with the
-     2N2222/1kΩ interface actually wired in, rather than assembling
-     straight from the paper design.
+   - **Divider-margin question resolved.** Dual-channel capture (CH1=Green
+     at a sensitive 50mV/div, CH2=Yellow at 5V/div, same timebase) plus a
+     Fluke DMM cross-check settled what Green actually does: quiet during
+     ordinary keypad activity (small, sub-volt blips — DMM caught it
+     momentarily hitting ~780mV, consistent with the scope's small-spike
+     reading, not a robust signal of its own), but producing a real,
+     larger transmission when the panel actually has something to say —
+     two separate Keypad-Lockout-triggered captures peaked at 8.4V and
+     9.6V respectively. The higher of those (**9.6V**) is the right
+     worst-case number for divider sizing, not the quiet baseline: 9.6V ×
+     (10k/43k) ≈ **2.23V** at GP26 — comfortably under the RP2040's 3.6V
+     absolute max, with substantially more margin than the ~3.2-3.3V
+     estimated earlier from the assumed 13.8-14V worst-case-AUX figure.
+     Green's real panel-driven-high level runs well below the raw AUX
+     rail it was originally assumed to swing to, which is why the margin
+     turned out this much more comfortable. No clamp diode, no ratio
+     change — 33K/10K stands, confirmed with real bench data on both
+     lines now.
+   - **Before soldering headers and going physically live:** one step
+     left — a re-check with the 2N2222/1kΩ interface actually wired in,
+     rather than assembling straight from the paper design. The clean
+     full-scale captures on both lines are done.
 2. **Battery capacity** — deliberately left undecided, and not needed
    during the development/testing phase — the build will run on isolated
    wall power (via the isolated USB-C/DC-DC charge path already in the
