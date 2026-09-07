@@ -211,6 +211,25 @@ void loop() {
         cntF7Seen++;
         f7Valid = (uint8_t)cmd->cbuf[12] != 0x77;
         if (f7Valid) cntF7Valid++;
+        // Ground-truth dump: content is coming back suspiciously blank
+        // (all-zero flags, empty prompt) even on checksum-valid frames.
+        // A real frame's checksum byte is chosen by the sender to make
+        // the total sum work regardless of content, so "valid" alone
+        // doesn't prove the bytes were sampled correctly -- print the raw
+        // frame so it can be compared against the documented F7 layout
+        // (see the byte-position comments atop Vista::onDisplay() and the
+        // example frames commented in vista.h) rather than guessing
+        // further from the parsed/summarized fields alone.
+        {
+          String hex = "RAWF7 valid=" + String(f7Valid ? 1 : 0) + " size=" + String(cmd->size) + " bytes=";
+          for (size_t i = 0; i < cmd->size && i < CMDBUFSIZE; i++) {
+            uint8_t b = (uint8_t)cmd->cbuf[i];
+            if (b < 0x10) hex += "0";
+            hex += String(b, HEX);
+            hex += " ";
+          }
+          sendLine(hex);
+        }
         break;
       case 0xF6: cntF6++; break;
       case 0xF9: cntF9++; break;
