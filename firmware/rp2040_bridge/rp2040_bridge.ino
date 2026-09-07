@@ -144,6 +144,15 @@ void setup() {
 
 static uint32_t framesDecodedCount = 0;  // any cmdAvail() drain, any frame type
 
+// Bench diagnostic: per-opcode breakdown, so we can see whether F7 display
+// frames are even showing up at the rate the rest of the bus traffic
+// suggests they should, and if so, what fraction of them pass checksum.
+// Opcode meanings per vista.cpp's decodePacket(): F0=poll loop,
+// F7=status/display, F9=LRR, F6=key ack, F2=AUI, F8=unknown/generic,
+// FA=expander, FB=RF supervision.
+static uint32_t cntF0 = 0, cntF7Seen = 0, cntF7Valid = 0, cntF6 = 0, cntF9 = 0,
+                 cntFA = 0, cntF2 = 0, cntF8 = 0, cntFB = 0, cntOther = 0;
+
 void loop() {
   static unsigned long lastHeartbeatMs = 0;
   if (millis() - lastHeartbeatMs > 2000) {
@@ -154,6 +163,11 @@ void loop() {
 #else
     Serial.println("ALIVE framesDecoded=" + String(framesDecodedCount));
 #endif
+    Serial.println("STATS F0=" + String(cntF0) + " F7seen=" + String(cntF7Seen) +
+                    " F7valid=" + String(cntF7Valid) + " F6=" + String(cntF6) +
+                    " F9=" + String(cntF9) + " FA=" + String(cntFA) +
+                    " F2=" + String(cntF2) + " F8=" + String(cntF8) +
+                    " FB=" + String(cntFB) + " other=" + String(cntOther));
     lastHeartbeatMs = millis();
   }
 
@@ -189,7 +203,24 @@ void loop() {
     // esphome-vistaECP's own wrapper (vistaalarm.cpp) uses before trusting
     // a decoded frame's prompt fields. Anything else here would emit a
     // blank/stale DISP on every bus poll cycle.
-    if ((uint8_t)cmd->cbuf[0] == 0xF7 && (uint8_t)cmd->cbuf[12] != 0x77) {
+    uint8_t opcode = (uint8_t)cmd->cbuf[0];
+    bool f7Valid = false;
+    switch (opcode) {
+      case 0xF0: cntF0++; break;
+      case 0xF7:
+        cntF7Seen++;
+        f7Valid = (uint8_t)cmd->cbuf[12] != 0x77;
+        if (f7Valid) cntF7Valid++;
+        break;
+      case 0xF6: cntF6++; break;
+      case 0xF9: cntF9++; break;
+      case 0xFA: cntFA++; break;
+      case 0xF2: cntF2++; break;
+      case 0xF8: cntF8++; break;
+      case 0xFB: cntFB++; break;
+      default: cntOther++; break;
+    }
+    if (opcode == 0xF7 && f7Valid) {
       emitDisp(cmd->statusFlags);
     }
   }
