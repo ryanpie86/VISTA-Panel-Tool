@@ -1379,6 +1379,29 @@ void IRAM_ATTR Vista::rxHandleISR()
     {
       _markPulse = 2;
 
+      // Bench evidence: F7 long reads occasionally capture a few real
+      // payload bytes (proving PIO itself resyncs fine after a clean
+      // restart) but always stop dead at the very first ACK-slot
+      // excursion mid-message and never resume for the rest of the
+      // ~100ms read window, no matter how much further real bus traffic
+      // follows. Root cause was here, not in PIO: unconditionally
+      // dropping to sPolling below has no path back to sNormal except
+      // detecting a brand-new preamble (the _lowTime>3000/4600 branches
+      // further down) -- but the remaining bytes of an in-progress
+      // message are ordinary ~200-400us bit periods, never a multi-ms
+      // preamble, so _rxState (and PIO with it, gated off
+      // _rxState==sNormal) gets stranded in sPolling for whatever is
+      // left of the message the instant this fires even once. If we were
+      // already in sNormal -- an active read genuinely in progress --
+      // when this ACK slot interrupted it, resume sNormal once it's
+      // handled instead of falling back to sPolling: the low period has
+      // already ended (this runs on the rising edge marking that), so
+      // it's safe to keep treating this as the same in-progress message
+      // rather than waiting for an entirely new preamble. Bus-idle time
+      // between real frames still correctly falls back to sPolling,
+      // since _rxState there is sPolling already, not sNormal.
+      bool wasCapturingFrame = (_rxState == sNormal);
+
       ackAddr = _inFaultIdx == _outFaultIdx ? 0xFF : _zoneExpanders[_faultQueue[_outFaultIdx]].expansionAddr;
 
       if (ackAddr > 0 && ackAddr < 24)
@@ -1464,7 +1487,10 @@ void IRAM_ATTR Vista::rxHandleISR()
           
         }
       }
-      _rxState = sPolling; // set flag to skip capturing pulses in the receive buffer during polling phase
+      // Resume sNormal if this excursion interrupted an active capture
+      // (see the comment above); otherwise this is genuine between-frame
+      // idle time, and sPolling (waiting for the next preamble) is correct.
+      _rxState = wasCapturingFrame ? sNormal : sPolling;
     }
     else if (_lowTime > 4600 && _rxState == sPolling)
     { // 2400 baud cmd preamble
