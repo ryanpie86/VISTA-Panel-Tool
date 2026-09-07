@@ -117,7 +117,7 @@ ADC-capable pins (GP26-29) are broken out on this board, resolving the
 | Signal | Pin | Notes |
 |---|---|---|
 | Yellow (panel TX → RP2040 RX, through the 33K/10K divider) | **GP26** (ADC0) | Digital input mode |
-| Green (RP2040 TX → panel, drives the NPN base) | **GP27** (ADC1) | Digital output — resolves the old GPIO_26 dual-assignment conflict |
+| Green (RP2040 TX → panel, drives the NPN base) | **GP27** (ADC1) | Digital output — resolves the old GPIO_26 dual-assignment conflict. Base transistor: 2N2222, 1kΩ base resistor (see "Still open" item 1 for the sizing) |
 | Green bus-monitor tap (separate divider, per esphome-vistaECP's `MONITORTX` feature) | **GP28** (ADC2) | Digital input — passively decodes *other* devices' traffic on Green (other keypads, zone expanders, RF receiver modules) that the RP2040 wouldn't otherwise see; not collision detection on the RP2040's own TX. Feeds the future "Wireless (RF) zone visibility" / datalogger-role work in `CONCEPT.md`, not required for near-term ECP read/write |
 | Status LED (WS2812) | **GP16**, internal | Hardwired on-board, not a header pin — nothing to wire |
 
@@ -364,9 +364,22 @@ Vista panel keypad bus (4-wire ECP)
      Green/TX line in their default circuit is driven through a 4N35
      optocoupler + 180Ω resistor, not a transistor — the transistor variant
      this project uses is their separately-mentioned optocoupler-free
-     alternative, for which they don't publish exact component values, so
-     that part of the design remains ours to pin down, not a deviation
-     from a documented reference.)
+     alternative, for which they don't publish exact component values.)
+   - **Q1 and R_B confirmed:** 2N2222 for Q1 (user has stock on hand), 1kΩ
+     for R_B. Comfortably within spec for this role — 2N2222's Vceo
+     (30V+) is more than 2x the ~14V worst-case AUX voltage Q1 ever sees
+     across collector-emitter when off, its 600mA rating is far beyond
+     anything this bus's pull-up will ever ask it to sink, and its
+     switching speed (hundreds of MHz) isn't remotely a factor against
+     ~3ms bit cells. 1kΩ on the base (driven from GP27's 3.3V logic)
+     gives ~2.6mA of base current — comfortably saturating the transistor
+     at 2N2222's typical hFE well past any current this bus will draw,
+     without stressing the RP2040 GPIO's safe sourcing limit.
+   - **Before soldering headers and going physically live:** a few more
+     scope captures planned — the still-outstanding clean Yellow
+     full-scale capture (see follow-up above), plus a re-check with the
+     2N2222/1kΩ interface actually wired in, rather than assembling
+     straight from the paper design.
 2. **Battery capacity** — deliberately left undecided, and not needed
    during the development/testing phase — the build will run on isolated
    wall power (via the isolated USB-C/DC-DC charge path already in the
