@@ -9,6 +9,17 @@
 #if defined(ARDUINO_ARCH_RP2040) && !defined(USE_RP2040)
 #define USE_RP2040
 #endif
+
+// Upstream builds either as an ESPHome component (needs
+// esphome/core/defines.h) or standalone via its own ARDUINO_MQTT escape
+// hatch, which skips that include. We want standalone, always -- but a
+// #define in the .ino (rp2040_bridge.ino) only applies to that one
+// translation unit, not to vista.cpp/ECPSoftwareSerial.cpp, which the
+// Arduino build compiles separately. Define it here instead, in a header
+// every translation unit in this sketch includes first.
+#if !defined(ARDUINO_MQTT)
+#define ARDUINO_MQTT
+#endif
 // -------------------------------------------------------------------------
 
 #if not defined(USE_ESP_IDF)

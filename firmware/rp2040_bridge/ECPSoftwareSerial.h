@@ -25,10 +25,15 @@ Modified for 4800 8E2
 #pragma once
 
 // RP2040/Arduino-Pico port (VISTA-Panel-Tool): see vista.h for the
-// matching comment. Repeated here so this header is self-contained if
-// ever included on its own.
+// matching comments. Repeated here (USE_RP2040 and ARDUINO_MQTT both) so
+// this header is self-contained if ever included on its own -- and
+// because ECPSoftwareSerial.cpp is a separate translation unit from
+// vista.cpp, so it doesn't see vista.h's #defines either.
 #if defined(ARDUINO_ARCH_RP2040) && !defined(USE_RP2040)
 #define USE_RP2040
+#endif
+#if !defined(ARDUINO_MQTT)
+#define ARDUINO_MQTT
 #endif
 
 #if not defined(ALWAYS_INLINE_ATTR)

@@ -37,6 +37,10 @@
  *    up, not a firmware bug.
  */
 
+// vista.h itself defines ARDUINO_MQTT (every .cpp in this sketch is a
+// separate translation unit, so a #define here wouldn't reach
+// vista.cpp/ECPSoftwareSerial.cpp) -- kept here too as documentation of
+// intent, harmless as an identical redefinition.
 #define ARDUINO_MQTT
 #include "vista.h"
 
