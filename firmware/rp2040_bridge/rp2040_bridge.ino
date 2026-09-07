@@ -148,7 +148,19 @@ void loop() {
     cmdQueueItem *cmd = vista.getNextCmd();
     if (cmd == NULL)
       break;
-    emitDisp(cmd->statusFlags);
+    // getNextCmd() surfaces every decoded ECP frame type (routine bus
+    // polls, key-acks, expander/LRR/RF/AUI traffic, ...), not just alpha
+    // display updates -- they all funnel through the same
+    // pushCmdQueueItem() call in vista.cpp. Only 0xF7 frames populate
+    // statusFlags.prompt1/prompt2 (see Vista::onDisplay(), only called
+    // from the cbuf[0]==0xF7 branch of decodePacket()); cbuf[12]==0x77 is
+    // that branch's own "checksum failed" marker. Mirrors the same gate
+    // esphome-vistaECP's own wrapper (vistaalarm.cpp) uses before trusting
+    // a decoded frame's prompt fields. Anything else here would emit a
+    // blank/stale DISP on every bus poll cycle.
+    if ((uint8_t)cmd->cbuf[0] == 0xF7 && (uint8_t)cmd->cbuf[12] != 0x77) {
+      emitDisp(cmd->statusFlags);
+    }
   }
 
   if (keyPending) {
@@ -181,6 +193,15 @@ void loop() {
 // only currently depends on bit 0 meaning "armed", so that bit is load
 // bearing; the rest are this firmware's own convention, documented in
 // SERIAL_PROTOCOL.md.
+//
+// The panel re-broadcasts the same F7 status frame on essentially every
+// poll cycle even when nothing changed, so this also suppresses repeats --
+// SERIAL_PROTOCOL.md says DISP is "pushed whenever the ... display state
+// changes", not on every poll.
+static uint8_t lastFlags = 0xFF;  // sentinel: doesn't match any real byte we'd send on the very first real update
+static char lastAlpha[33] = {0};
+static bool haveLastDisp = false;
+
 static void emitDisp(const statusFlagType &sf) {
   char alpha[33];
   memcpy(alpha, sf.prompt1, 16);
@@ -196,6 +217,13 @@ static void emitDisp(const statusFlagType &sf) {
   if (sf.zoneBypass) flags |= 0x20;
   if (sf.alarm) flags |= 0x40;
   if (sf.acPower) flags |= 0x80;
+
+  if (haveLastDisp && flags == lastFlags && memcmp(alpha, lastAlpha, sizeof(alpha)) == 0)
+    return;
+
+  lastFlags = flags;
+  memcpy(lastAlpha, alpha, sizeof(alpha));
+  haveLastDisp = true;
 
   char flagsHex[3];
   snprintf(flagsHex, sizeof(flagsHex), "%02X", flags);
