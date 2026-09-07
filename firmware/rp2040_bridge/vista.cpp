@@ -84,6 +84,8 @@ void IRAM_ATTR txISRTrampolineRP2040()
 // trampolines above).
 static PIO s_ecpPio = pio0;
 static int s_ecpSm = -1;
+static uint s_ecpOffset = 0;
+static bool s_ecpActive = false;
 
 void Vista::pioRxInit()
 {
@@ -96,9 +98,9 @@ void Vista::pioRxInit()
   if (s_ecpSm < 0)
     return;
 
-  uint offset = pio_add_program(s_ecpPio, &ecp_uart_rx_program);
+  s_ecpOffset = pio_add_program(s_ecpPio, &ecp_uart_rx_program);
 
-  pio_sm_config c = ecp_uart_rx_program_get_default_config(offset);
+  pio_sm_config c = ecp_uart_rx_program_get_default_config(s_ecpOffset);
   sm_config_set_in_pins(&c, (uint)_rxPin);
   sm_config_set_in_shift(&c, true /* shift right, LSB first */, true /* autopush */, 8 /* threshold */);
   float div = (float)clock_get_hz(clk_sys) / (8.0f * 4800.0f);
@@ -107,8 +109,41 @@ void Vista::pioRxInit()
   pio_gpio_init(s_ecpPio, (uint)_rxPin);
   pio_sm_set_consecutive_pindirs(s_ecpPio, s_ecpSm, (uint)_rxPin, 1, false);
 
-  pio_sm_init(s_ecpPio, s_ecpSm, offset, &c);
-  pio_sm_set_enabled(s_ecpPio, s_ecpSm, true);
+  pio_sm_init(s_ecpPio, s_ecpSm, s_ecpOffset, &c);
+  // Left disabled here, deliberately -- see pioRxSetActive(). PIO has no
+  // concept of this bus's multi-millisecond sync/preamble pulses (the
+  // _lowTime > 3000/4600/9000 thresholds below): its wait-for-start-bit
+  // instruction treats the very first low edge as a start bit and begins
+  // framing immediately, regardless of whether that low period turns out
+  // to be a real ~208us start bit or an actual several-millisecond
+  // preamble. Left running continuously, it would spend the entire
+  // preamble repeatedly "framing" garbage all-zero bytes off that one
+  // sustained low level -- bench-confirmed as the source of a large
+  // "other" (unrecognized opcode) flood and zero real F7 frames ever
+  // reaching the main dispatch, even across live bus traffic including a
+  // real alarm event. Gating pump() output alone (checking _rxState
+  // there) wasn't enough, because PIO's own bit-phase could already be
+  // misaligned by the time real data started. Instead, only run PIO
+  // during the actual data window, restarting it cleanly every time.
+}
+
+// Enables/restarts or disables the PIO state machine to match whether
+// we're in the bus's real-data window (_rxState==sNormal) -- see the
+// comment at the end of pioRxInit() for why this exists. Called from
+// rxHandleISR() only on an actual _rxState transition, not every edge.
+static void pioRxSetActive(bool active)
+{
+  if (s_ecpSm < 0 || active == s_ecpActive)
+    return;
+  pio_sm_set_enabled(s_ecpPio, s_ecpSm, false);
+  if (active)
+  {
+    pio_sm_clear_fifos(s_ecpPio, s_ecpSm);
+    pio_sm_restart(s_ecpPio, s_ecpSm);
+    pio_sm_exec(s_ecpPio, s_ecpSm, pio_encode_jmp(s_ecpOffset));
+    pio_sm_set_enabled(s_ecpPio, s_ecpSm, true);
+  }
+  s_ecpActive = active;
 }
 
 void Vista::pioRxPump()
@@ -118,11 +153,10 @@ void Vista::pioRxPump()
   while (!pio_sm_is_rx_fifo_empty(s_ecpPio, s_ecpSm))
   {
     uint8_t b = (uint8_t)(pio_sm_get(s_ecpPio, s_ecpSm) >> 24);
-    // Same gate rxHandleISR() applies before calling vistaSerial->rxRead()
-    // in the software path -- PIO free-runs regardless of bus state, so
-    // bytes framed while we're not actually in the middle of real data
-    // (poll loop, preamble, ACK slot) get drained here and discarded
-    // rather than fed to the decoder.
+    // Belt-and-suspenders: PIO is now only enabled during sNormal (see
+    // pioRxSetActive()), but this mirrors the same gate rxHandleISR()
+    // used before calling vistaSerial->rxRead() in the software path, in
+    // case a byte was already in the FIFO right at a state transition.
     if (_rxState == sNormal || _highTime == 0)
       vistaSerial->pushByte(b);
   }
@@ -1307,6 +1341,21 @@ void IRAM_ATTR Vista::rxHandleISR()
     _highTime = 0;
   }
 #if defined(USE_RP2040)
+  // Enable PIO only during the real data window (_rxState==sNormal),
+  // restarting it cleanly on every entry -- see the comment at the end of
+  // pioRxInit() for why. Checked here (once per edge, after the state
+  // machine above has settled this edge's outcome) rather than at each
+  // individual "_rxState = X" assignment site, so every transition path
+  // (there are a few) is covered by one check instead of needing to
+  // remember to add this at each one.
+  {
+    static char lastRxStateForPio = -1;
+    if (_rxState != lastRxStateForPio)
+    {
+      pioRxSetActive(_rxState == sNormal);
+      lastRxStateForPio = _rxState;
+    }
+  }
   // Byte assembly for this pin normally happens in PIO now (see
   // pioRxPump(), called once per Vista::handle()) -- this software path
   // is what bench-testing showed losing sync under bus load, which is
