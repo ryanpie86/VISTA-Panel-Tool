@@ -72,7 +72,19 @@ typedef char byte;
 #include <atomic>
 
 #if defined(USE_RP2040) && not defined(IRAM_ATTR)
-#define IRAM_ATTR
+// RP2040/Arduino-Pico port (VISTA-Panel-Tool): upstream's own IRAM_ATTR
+// hook (above) just no-ops this on RP2040, which means these hot,
+// edge-frequency ISR functions run from flash (XIP) here instead of RAM
+// like they do on ESP8266/ESP32 -- losing the timing guarantee IRAM_ATTR
+// exists for in the first place (immunity to flash-cache-miss stalls).
+// Give RP2040 a real equivalent: GCC's section attribute, prefix-usable
+// exactly like the existing "void IRAM_ATTR foo()" call sites already
+// are. Anything placed in a ".time_critical*" section is pulled into RAM
+// by the Pico SDK's standard linker script -- this is the same mechanism
+// the SDK's own __not_in_flash_func() macro uses, just without its
+// per-function unique section-name wrapping (not required for the
+// linker's placement rule to apply, just for organization).
+#define IRAM_ATTR __attribute__((section(".time_critical")))
 #endif
 
 #if defined(USE_RP2040) && not defined(ESP)
