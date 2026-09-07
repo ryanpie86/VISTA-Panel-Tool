@@ -5,6 +5,7 @@
 #endif
 #if defined(USE_RP2040)
 #include "hardware/sync.h"
+#include "hardware/gpio.h"
 #endif
 
 Vista *pointerToVistaClass;
@@ -1103,6 +1104,11 @@ void IRAM_ATTR Vista::rxHandleISR()
   static uint8_t ackCount=0;
     #if defined(USE_ESP_IDF) or defined(ESP32)
   bool level=gpio_get_level((gpio_num_t) _rxPin);
+  #elif defined(USE_RP2040)
+  // Direct Pico SDK register read -- Arduino's digitalRead() carries pin-
+  // lookup/validation overhead this ISR (called on every bus edge) can't
+  // afford to add to its critical section.
+  bool level=gpio_get((uint)_rxPin);
   #else
   bool level=digitalRead(_rxPin);
   #endif

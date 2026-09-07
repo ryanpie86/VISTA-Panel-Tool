@@ -27,6 +27,7 @@ Modified for 4800 8E2
 #endif
 #if defined(USE_RP2040)
 #include "hardware/sync.h"
+#include "hardware/gpio.h"
 #endif
 
 
@@ -656,6 +657,8 @@ void IRAM_ATTR SoftwareSerial::rxRead()
 {
     #if defined(USE_ESP_IDF) or defined(ESP32)
     bool level= gpio_get_level((gpio_num_t)m_rxPin);
+    #elif defined(USE_RP2040)
+    bool level = gpio_get((uint)m_rxPin);
     #else
     bool level = digitalRead(m_rxPin);
     #endif
