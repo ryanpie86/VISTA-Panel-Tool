@@ -4,12 +4,12 @@ The RP2040 owns everything time-critical on the ECP bus (bit-level pulse
 timing, per-device address slots, framing) -- adapted from the
 interrupt-driven ECP library in `Dilbert66/esphome-vistaECP` (that project
 only documents ESP8266/ESP32 pin assignments; this build's own Waveshare
-RP2040-Zero pinout is finalized separately -- Green=GP26, Yellow=GP27,
-Yellow bus-monitor tap=GP28 (Yellow/Green confirmed on the bench as
-keypad-TX/panel-RX respectively, the reverse of what esphome-vistaECP's
-own docs suggested), using the same non-isolated resistor-divider +
-transistor bus-interface circuit as esphome-vistaECP's ESP32 build, see
-`HARDWARE_ARCHITECTURE.md` "Bus coprocessor: RP2040-Zero"). The Pi never
+RP2040-Zero pinout is finalized separately -- Yellow=GP26, Green=GP27,
+Green bus-monitor tap=GP28 (Yellow=panel "data out", Green=keypad "data
+in", per the Vista-20P's own technician manual, using the same
+non-isolated resistor-divider + transistor bus-interface circuit as
+esphome-vistaECP's ESP32 build, see `HARDWARE_ARCHITECTURE.md` "Bus
+coprocessor: RP2040-Zero"). The Pi never
 touches bus timing -- it only sees a simple newline-delimited text protocol
 over USB-serial (a single USB-C cable, 115200 8N1; a UART-over-GPIO-header
 plan was tried and reverted once remote firmware flashing from the Pi came
