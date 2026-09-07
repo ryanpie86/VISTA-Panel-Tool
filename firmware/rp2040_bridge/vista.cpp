@@ -78,9 +78,10 @@ volatile uint32_t pioForwardedTotal = 0;
 volatile uint32_t pumpedDuringLastF7Read = 0;
 
 // Counts only real pio_sm_set_enabled(..., false) transitions (see
-// pioRxSetActive()) -- proves or disproves whether the _f7LongReadActive
-// override in rxHandleISR()'s gating hook actually has a gap, versus PIO
-// staying enabled the whole time yet still producing nothing.
+// pioRxSetActive()). Used during the F7-payload investigation (see the
+// gating hook's comment in rxHandleISR()) to confirm a since-reverted
+// override had no gap; kept as an ongoing sanity check that PIO now
+// legitimately deactivates once per real _rxState excursion, as intended.
 volatile uint32_t pioDeactivateCount = 0;
 volatile uint32_t deactivatedDuringLastF7Read = 0;
 
@@ -175,17 +176,6 @@ static void pioRxSetActive(bool active)
 {
   if (s_ecpSm < 0 || active == s_ecpActive)
     return;
-  // Bench evidence: lastF7Pumped read 0 (PIO produces zero bytes across
-  // an entire ~20ms F7 read) even with the _f7LongReadActive override
-  // in rxHandleISR()'s gating hook already in place -- which by that
-  // logic should mean this function is never called with active=false
-  // during that window at all. This counter proves or disproves that
-  // directly: if it stays 0 during the window, the override has no gap
-  // and the real cause is elsewhere (e.g. PIO's FIFO stalling during
-  // the ACK-slot's blocking TX writes regardless of enable state,
-  // corrupting its bit-phase for the rest of the frame even without a
-  // full disable/restart); if it's nonzero, the override itself has a
-  // hole somewhere that hasn't been found yet.
   if (!active)
     pioDeactivateCount++;
   pio_sm_set_enabled(s_ecpPio, s_ecpSm, false);
@@ -248,30 +238,20 @@ void Vista::pioRxPump()
       if (diff != 0 && (diff & (diff - 1)) == 0)
         nearF7ByteSeen++;
     }
-    // Belt-and-suspenders: PIO is now only enabled during sNormal (see
-    // pioRxSetActive()), but this mirrors the same gate rxHandleISR()
-    // used before calling vistaSerial->rxRead() in the software path, in
-    // case a byte was already in the FIFO right at a state transition.
+    // Belt-and-suspenders: PIO is only enabled during sNormal (see
+    // pioRxSetActive(), and rxHandleISR()'s gating hook that drives it),
+    // but this mirrors the same gate rxHandleISR() used before calling
+    // vistaSerial->rxRead() in the software path, in case a byte was
+    // already in the FIFO right at a state transition.
     //
-    // _f7LongReadActive needs the same OR here that pioRxSetActive()'s
-    // caller already gets (see rxHandleISR()): that flag keeps PIO
-    // physically sampling through a _rxState excursion mid-F7-read (the
-    // 9ms ACK slot bouncing _rxState to sPolling without actually ending
-    // the frame), but without it also covering THIS gate, every byte PIO
-    // still correctly captures during that excursion was being silently
-    // dropped right here instead of reaching vistaSerial -- explaining
-    // exactly what rawF7ByteSeen vs. F7valid showed on the bench: PIO
-    // sees the opcode fine, the payload still never arrives.
-    // pioForwardedTotal isolates whether this gate is still the
-    // bottleneck (it would stay far below pioPumpedTotal) or whether
-    // bytes are being forwarded into vistaSerial's buffer without
-    // readChars() ever seeing them (pioForwardedTotal climbs normally
-    // while LONGREAD bytes stays 0 regardless) -- a step backward from
-    // earlier bench runs that saw a handful of payload bytes trickle
-    // through, even though this gate only gained an extra (more
-    // permissive) OR condition and so cannot itself have caused fewer
-    // bytes to reach vistaSerial.
-    if (_rxState == sNormal || _highTime == 0 || _f7LongReadActive)
+    // This gate previously also OR'd in _f7LongReadActive, to forward
+    // bytes PIO kept physically sampling through a _rxState excursion
+    // mid-F7-read. That paired override (in rxHandleISR()'s gating hook)
+    // has been reverted -- it was itself the cause of F7 payloads never
+    // arriving, not a fix for it (see that hook's comment) -- so PIO no
+    // longer stays enabled through such an excursion in the first place,
+    // making the extra OR here dead weight; removed to match.
+    if (_rxState == sNormal || _highTime == 0)
     {
       vistaSerial->pushByte(b);
       pioForwardedTotal++;
@@ -1383,12 +1363,11 @@ void IRAM_ATTR Vista::rxHandleISR()
       {
         vistaSerial->write(addrToBitmask1(ackAddr), false, 4800);
 #if defined(USE_RP2040)
-        // Bench evidence: F7 long reads still captured zero bytes beyond
-        // the opcode even after PIO was kept active across _rxState
-        // excursions (see _f7LongReadActive) -- because the real problem
-        // here is different. This whole branch runs inside a hardware
-        // ISR with global interrupts disabled (disableInterrupts() at
-        // the top of rxHandleISR()), and each vistaSerial->write() below
+        // Bench evidence: F7 long reads captured zero bytes beyond the
+        // opcode, traced to a real, separate problem here. This whole
+        // branch runs inside a hardware ISR with global interrupts
+        // disabled (disableInterrupts() at the top of rxHandleISR()),
+        // and each vistaSerial->write() below
         // blocks for a full bit-banged byte time (~2ms at 4800 baud).
         // While that runs, the main-thread readChars() loop -- the only
         // other place pioRxPump() is called -- can't run at all, since
@@ -1503,26 +1482,32 @@ void IRAM_ATTR Vista::rxHandleISR()
   // (there are a few) is covered by one check instead of needing to
   // remember to add this at each one.
   //
-  // Bench evidence (F7 long reads consistently capturing zero bytes
-  // beyond the opcode, 100% of attempts) traced to the _lowTime > 9000
-  // branch above (the bus's ~9ms+ ACK-opportunity slot): it
-  // unconditionally forces _rxState = sPolling regardless of what state
-  // we were in, and on a live bus that slot recurs often enough to land
-  // within the first few ms of essentially every F7 payload, killing PIO
-  // before a second byte can arrive. That branch also does real ACK-TX
-  // work this comment must not touch, and _rxState itself has other
-  // consumers, so instead of changing what _rxState becomes, only the
-  // PIO on/off *decision* is overridden here while _f7LongReadActive
-  // (see its declaration in vista.h) says the main thread is actively
-  // polling for this frame's bytes -- any _rxState excursion away from
-  // sNormal during that window is treated as incidental, not a real
-  // end-of-frame.
+  // A prior fix here (keeping PIO forced "active" via _f7LongReadActive
+  // across an _rxState excursion during an F7 read, to survive the bus's
+  // ~9ms+ ACK-opportunity slot without losing the frame) was reverted.
+  // Bench diagnostics (edgesDuringLastF7Read / deactivatedDuringLastF7Read
+  // / pumpedDuringLastF7Read together) proved that override was itself
+  // the bug: it kept PIO enabled straight through that same multi-ms
+  // sustained-low ACK slot -- exactly the condition pioRxInit()'s own
+  // comment warns about. PIO's wait-for-start-bit instruction is a level
+  // check, not an edge detector: left running into a low period already
+  // in progress, it immediately "frames" that sustained low as a garbage
+  // byte (or several), desyncing its bit-phase for the rest of the frame
+  // -- matching what was measured exactly: the opcode byte captured
+  // correctly (PIO had just been cleanly restarted going into sNormal),
+  // then zero further bytes even across confirmed real edges on the pin
+  // afterward. Disabling PIO on any _rxState excursion and letting it
+  // restart cleanly on the next real entry to sNormal -- pioRxInit()'s
+  // original, documented invariant -- is correct behavior here, not the
+  // bug: the ACK slot is a distinct protocol phase, not itself carrying
+  // payload data, and readChars()'s own polling loop already tolerates
+  // gaps while waiting for more ring-buffer bytes regardless of what PIO
+  // is doing in the background.
   {
     static char lastRxStateForPio = -1;
     if (_rxState != lastRxStateForPio)
     {
-      bool wantPioActive = (_rxState == sNormal) || _f7LongReadActive;
-      pioRxSetActive(wantPioActive);
+      pioRxSetActive(_rxState == sNormal);
       lastRxStateForPio = _rxState;
     }
   }
@@ -1973,41 +1958,28 @@ bool Vista::handle()
 
       _cbuf[gidx++] = x;
 #if defined(USE_RP2040)
-      // See _f7LongReadActive's declaration in vista.h -- tells
-      // rxHandleISR() this specific long read is in flight so it won't
-      // false-bail sNormal (and disable PIO with it) on a timing hiccup.
-      _f7LongReadActive = true;
-      // Bench diagnostic: f7FollowupBurst (same-drain-pass backlog) turned
-      // out to be a bad test -- readChars() polls every ~4-6us against a
-      // ~2.5ms/byte transmission rate, so consecutive real bytes almost
-      // never land in the same FIFO drain pass even when everything is
-      // working; it stays 0 either way and proves nothing. This measures
-      // the same question properly: total bytes PIO produces (pumped,
-      // regardless of value) across the ENTIRE ~20ms window of this one
-      // F7 read attempt. If it's ~0 while forwarded==pumped elsewhere
-      // (ruling out every software gate), PIO's hardware sampler itself
-      // is not producing payload bytes during this window at all -- a
-      // different class of bug than anything fixed in this file so far.
+      // Bench diagnostics kept across the fix in rxHandleISR()'s PIO
+      // gating hook (see its comment) that stopped forcing PIO to stay
+      // enabled through a _rxState excursion mid-F7-read -- that override
+      // was proven to be the actual cause of payload loss, not a
+      // workaround for it: deactivatedDuringLastF7Read read 0 (no gap in
+      // the old override) while lastF7Pumped also read 0 (PIO produced
+      // nothing regardless) and lastF7Edges read nonzero on real hits
+      // (the wire did toggle), together isolating the bug to PIO itself
+      // "framing" the ~9ms ACK-slot's sustained low as garbage data while
+      // kept alive through it. These three before/after snapshots stay in
+      // place to verify the fix: deactivatedDuringLastF7Read should now
+      // read nonzero on any F7 read that spans an ACK slot (PIO legitimately
+      // disabling and cleanly restarting, as originally designed), and
+      // lastF7Pumped should start capturing real payload bytes instead of
+      // consistently reading 0.
       uint32_t pumpedBeforeF7Read = pioPumpedTotal;
       uint32_t deactivatesBeforeF7Read = pioDeactivateCount;
-      // rxEdgeCountRP2040 increments in rxISRTrampolineRP2040() on every
-      // real hardware edge-triggered interrupt on GP26 -- ground truth for
-      // whether the physical line toggled at all, entirely independent of
-      // PIO's internal state (its SM, FIFO, and enable bit are invisible
-      // to this counter). deactivatedDuringLastF7Read=0 already proved the
-      // _f7LongReadActive override has no gap, yet lastF7Pumped stayed 0 --
-      // so this answers the next question directly: did GP26 see ANY edge
-      // during that window (pointing at a PIO-internal bug: the bit-phase
-      // misalignment/FIFO-stall class of hypothesis) or none at all
-      // (meaning the line itself was quiet -- not a software bug in this
-      // file, but a real absence of transitions on the wire during that
-      // specific window).
       uint32_t edgesBeforeF7Read = rxEdgeCountRP2040;
       readChars(F7_MESSAGE_LENGTH - 1, _cbuf, &gidx);
       pumpedDuringLastF7Read = pioPumpedTotal - pumpedBeforeF7Read;
       deactivatedDuringLastF7Read = pioDeactivateCount - deactivatesBeforeF7Read;
       edgesDuringLastF7Read = rxEdgeCountRP2040 - edgesBeforeF7Read;
-      _f7LongReadActive = false;
 #else
       readChars(F7_MESSAGE_LENGTH - 1, _cbuf, &gidx);
 #endif

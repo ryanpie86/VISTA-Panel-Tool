@@ -112,29 +112,36 @@ run during `_rxState==sNormal` (the real data window), reset cleanly
 that window opens.
 
 Live-traffic bench testing (real Vista-20P, concurrent keypad activity)
-found one more failure mode in that gating: the `_highTime > 6000us`
-check `rxHandleISR()` uses to recover from `sNormal` if a frame stalls is
-itself edge-interrupt-driven, and under heavy bus load (frequent F0
-polls) its own edge servicing can lag enough to look like a 6ms+ gap
-occurred mid-frame even though PIO, sampling in hardware, was still
-receiving real bytes the whole time -- disabling PIO partway through an
-F7 frame and truncating it (observed consistently around byte 12-13 of
-45). `Vista::_f7LongReadActive` (set only around the F7 payload's long
-`readChars()` call) tells that check to stand down for the duration,
-since the long read's own 20ms poll-loop timeout is what should decide
-whether the frame actually stalled, not edge timing that's known to be
-unreliable under exactly this load. The ordinary short-frame recovery
-that check exists for elsewhere is untouched.
+found this exact failure mode hitting F7 long reads: the bus's ~9ms+
+ACK-opportunity slot (`_lowTime > 9000` in `rxHandleISR()`) unconditionally
+forces `_rxState = sPolling` regardless of what state was active, and on a
+live bus that slot lands within the first few ms of essentially every F7
+payload -- disabling PIO before more than the opcode byte can arrive.
 
-That gating fix alone didn't finish the job -- the next bench round still
-showed F7 long reads capturing zero bytes beyond the opcode, identical to
-before. The actual remaining cause: `rxHandleISR()`'s `_lowTime > 9000`
-ACK-opportunity branch (also where this firmware's own pending key-ack
-bits get transmitted) can call `vistaSerial->write()` up to three times
-back-to-back, each blocking for a full bit-banged byte (~2ms at 4800
-baud) -- and it does this from inside a real hardware interrupt handler,
-with global interrupts disabled for the whole branch
-(`disableInterrupts()`/`restoreInterrupts()` bracket all of
+A first fix attempted (`Vista::_f7LongReadActive`, since removed) forced
+PIO to stay enabled across any `_rxState` excursion for the duration of
+the F7 long read, on the theory that the excursion was incidental and PIO
+should just keep sampling through it. Follow-up bench diagnostics
+(deactivation counts and hardware-edge counts snapshotted before/after
+each F7 read) proved that was the actual cause of the payload loss, not a
+workaround for it: kept alive straight through the ACK slot's sustained
+low pulse, PIO's wait-for-start-bit instruction (a level check, not an
+edge detector) immediately "framed" that pulse as a garbage byte,
+desyncing its bit-phase for the rest of the frame -- exactly the failure
+mode described above, just triggered by a different sustained-low
+condition than the original preamble case. The fix was reverted: PIO now
+disables and cleanly restarts on every `_rxState` excursion including the
+ACK slot, matching the original invariant. The ACK slot itself carries no
+payload data, and `readChars()`'s own poll-loop timeout already tolerates
+the resulting gap while PIO resumes capturing once `_rxState` returns to
+`sNormal`.
+
+A separate, real problem in that same ACK-opportunity branch: it (also
+where this firmware's own pending key-ack bits get transmitted) can call
+`vistaSerial->write()` up to three times back-to-back, each blocking for a
+full bit-banged byte (~2ms at 4800 baud) -- and it does this from inside a
+real hardware interrupt handler, with global interrupts disabled for the
+whole branch (`disableInterrupts()`/`restoreInterrupts()` bracket all of
 `rxHandleISR()`). While that runs, the main-thread `readChars()` polling
 loop -- the only other place `pioRxPump()` was being called -- can't run
 at all on this single core, so PIO's RX FIFO (4 words deep) fills and
@@ -147,11 +154,12 @@ cheap extra headroom on top of that.
 
 If `RAW`/`RAWF7` dumps still come back truncated after this, suspect the
 same class of problem -- something in `rxHandleISR()` blocking long
-enough to starve PIO's FIFO of draining -- before assuming the PIO
-program itself (`ecp_uart_rx.pio`, `Vista::pioRxInit()`) is wrong; its
-cycle counts and clock-divider math were verified against a real
-oscilloscope capture and haven't been the source of truncation in
-testing so far.
+enough to starve PIO's FIFO of draining, or PIO being kept enabled through
+a sustained-low condition it can't distinguish from a start bit -- before
+assuming the PIO program itself (`ecp_uart_rx.pio`, `Vista::pioRxInit()`)
+is wrong; its cycle counts and clock-divider math were verified against a
+real oscilloscope capture and haven't themselves been the source of
+truncation in testing so far.
 
 ## PIO code generation
 
