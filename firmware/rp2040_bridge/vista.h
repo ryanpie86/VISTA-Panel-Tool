@@ -42,6 +42,8 @@ extern volatile uint32_t longReadBytes;
 extern volatile uint32_t longReadTimeouts;
 extern volatile uint32_t longReadElapsedUs;
 extern volatile uint32_t f7BranchEntries;
+extern volatile uint32_t rawF7ByteSeen;
+extern volatile uint32_t pioPumpedTotal;
 #endif
 
 

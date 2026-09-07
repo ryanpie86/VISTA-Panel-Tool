@@ -56,6 +56,24 @@ volatile uint32_t longReadTimeouts = 0;
 volatile uint32_t longReadElapsedUs = 0;
 volatile uint32_t f7BranchEntries = 0;
 
+// Bench diagnostic: every fix so far has addressed a real, confirmed bug
+// (PIO/_rxState gating, an ISR blocking PIO's FIFO drain, a ring-buffer
+// race between the two pump() call sites) without resolving the actual
+// symptom -- F7 never reaching the dispatcher at all, even across a live
+// run the user confirmed included several real keypad display changes
+// (i.e. real F7 broadcasts definitely occurred on the wire). These
+// counters sit at the lowest possible level -- directly on PIO's raw FIFO
+// output in pioRxPump(), before ANY gating or dispatch logic -- to answer
+// one question directly: does PIO's hardware sampler ever see a 0xF7
+// byte on the wire at all? If rawF7ByteSeen stays 0 while pioPumpedTotal
+// climbs normally, the byte is being lost at the PIO/bit-sampling layer
+// itself (wrong framing/alignment for this specific transmission,
+// possibly baud- or preamble-related) -- upstream of every fix so far.
+// If it's nonzero, the loss is downstream of this point instead (the
+// _rxState/_highTime gate in this same function, or something after).
+volatile uint32_t rawF7ByteSeen = 0;
+volatile uint32_t pioPumpedTotal = 0;
+
 // arduino-pico's attachInterrupt() has no arg-passing variant (unlike
 // ESP8266/ESP32's attachInterruptArg). Since this firmware only ever runs
 // one Vista instance, route through the same file-scope instance pointer
@@ -184,6 +202,9 @@ void Vista::pioRxPump()
   while (!pio_sm_is_rx_fifo_empty(s_ecpPio, s_ecpSm))
   {
     uint8_t b = (uint8_t)(pio_sm_get(s_ecpPio, s_ecpSm) >> 24);
+    pioPumpedTotal++;
+    if (b == 0xF7)
+      rawF7ByteSeen++;
     // Belt-and-suspenders: PIO is now only enabled during sNormal (see
     // pioRxSetActive()), but this mirrors the same gate rxHandleISR()
     // used before calling vistaSerial->rxRead() in the software path, in
