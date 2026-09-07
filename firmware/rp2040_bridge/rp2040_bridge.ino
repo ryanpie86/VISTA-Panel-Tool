@@ -91,12 +91,23 @@ static unsigned long lastBusFaultReportMs = 0;
 // vista.keybusConnected (upstream) is never actually set true anywhere in
 // the library -- only ever assigned false, in Vista::stop(). Confirmed by
 // grepping both the original esphome-components source and our vendored
-// copy. Track real bus activity ourselves instead: any decoded frame at
-// all (not just valid 0xF7 display frames) proves the bus is alive, since
-// routine polling traffic (0xF0) is constant on a live ECP bus.
+// copy. Track real bus activity ourselves instead.
+//
+// Originally this fired on *any* decoded frame, including the catch-all
+// "other" (unrecognized opcode) bucket. That was fine with the old
+// software bit sampler, which rarely survived long enough on pure noise
+// (e.g. GP26 floating with the panel powered off) to assemble a complete
+// frame -- but PIO is far more reliable, and bench-confirmed it happily
+// frames ambient noise into a steady stream of garbage "other" frames,
+// keeping this permanently "connected" with no panel attached at all.
+// A random noise byte only needs to coincidentally start with a known
+// opcode (1/256 odds) and pass whatever loose structure that opcode
+// requires -- weak protection. A *valid* F7 frame requires a specific
+// 45-byte structure to pass its checksum, which pure noise essentially
+// never produces by chance -- so only that counts as real activity now.
 static unsigned long lastBusActivityMs = 0;
 static bool everSawBusActivity = false;
-static const unsigned long BUS_ACTIVITY_TIMEOUT_MS = 3000;  // no frame in 3s -> call it down
+static const unsigned long BUS_ACTIVITY_TIMEOUT_MS = 3000;  // no valid F7 in 3s -> call it down
 
 static void emitDisp(const statusFlagType &sf);
 static void handleSerialLine(const String &line);
@@ -223,8 +234,6 @@ void loop() {
     cmdQueueItem *cmd = vista.getNextCmd();
     if (cmd == NULL)
       break;
-    lastBusActivityMs = millis();
-    everSawBusActivity = true;
     framesDecodedCount++;
     // getNextCmd() surfaces every decoded ECP frame type (routine bus
     // polls, key-acks, expander/LRR/RF/AUI traffic, ...), not just alpha
@@ -273,6 +282,8 @@ void loop() {
       default: cntOther++; break;
     }
     if (opcode == 0xF7 && f7Valid) {
+      lastBusActivityMs = millis();
+      everSawBusActivity = true;
       emitDisp(cmd->statusFlags);
     }
   }
