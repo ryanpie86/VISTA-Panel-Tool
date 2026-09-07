@@ -195,15 +195,22 @@ void loop() {
                     " F2=" + String(cntF2) + " F8=" + String(cntF8) +
                     " FB=" + String(cntFB) + " other=" + String(cntOther));
 #if defined(ARDUINO_ARCH_RP2040)
-    // readChars()'s own poll loop, isolated to long (44-byte, F7-only)
-    // reads. longReadAttempts should roughly track F7seen. avgPolls very
-    // low relative to the ~20ms/4us ~= 5000 polls a full timeout should
-    // produce means something is starving the poll loop of CPU time
-    // (an interference problem); avgPolls near that ceiling with bytes
-    // still short means the loop is running at full speed but genuinely
-    // isn't getting new data (points back at the ISR/edge-loss theory).
+    // readChars()'s own poll loop, isolated to any "long" (ct>=20) call --
+    // turns out that's NOT unique to the F7 branch: F2/F8/FA frames call
+    // readChars() with a length byte read from the packet itself
+    // (readChars(_cbuf[N], ...)), which can also exceed 20 if that byte
+    // is corrupted. f7BranchEntries (incremented directly in the real
+    // if(x==0xF7) branch in vista.cpp) is the unambiguous count to compare
+    // F7seen against -- if longRead attempts >> f7BranchEntries, most of
+    // this traffic isn't F7 at all. avgPolls very low relative to the
+    // ~20ms/4us ~= 5000 polls a full timeout should produce means
+    // something is starving the poll loop of CPU time (an interference
+    // problem); avgPolls near that ceiling with bytes still short means
+    // the loop is running at full speed but genuinely isn't getting new
+    // data (points back at the ISR/edge-loss theory).
     uint32_t lra = longReadAttempts;
     Serial.println("LONGREAD attempts=" + String(lra) +
+                    " f7Branch=" + String(f7BranchEntries) +
                     " polls=" + String(longReadPolls) +
                     " bytes=" + String(longReadBytes) +
                     " timeouts=" + String(longReadTimeouts) +

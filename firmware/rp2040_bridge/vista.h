@@ -41,6 +41,7 @@ extern volatile uint32_t longReadPolls;
 extern volatile uint32_t longReadBytes;
 extern volatile uint32_t longReadTimeouts;
 extern volatile uint32_t longReadElapsedUs;
+extern volatile uint32_t f7BranchEntries;
 #endif
 
 

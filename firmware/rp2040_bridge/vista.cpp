@@ -54,6 +54,7 @@ volatile uint32_t longReadPolls = 0;
 volatile uint32_t longReadBytes = 0;
 volatile uint32_t longReadTimeouts = 0;
 volatile uint32_t longReadElapsedUs = 0;
+volatile uint32_t f7BranchEntries = 0;
 
 // arduino-pico's attachInterrupt() has no arg-passing variant (unlike
 // ESP8266/ESP32's attachInterruptArg). Since this firmware only ever runs
@@ -1739,6 +1740,15 @@ bool Vista::handle()
 
     if (x == 0xF7)
     {
+#if defined(USE_RP2040)
+      // Bench diagnostic: the existing "longRead" counters in readChars()
+      // fire on any ct>=20 call, which was assumed to mean only this F7
+      // branch -- but F2/F8/FA frames call readChars() with a length byte
+      // read from the packet itself (readChars(_cbuf[N], ...)), which
+      // could also exceed 20 if that byte is corrupted. This counter is
+      // unambiguous: it only increments here, in the real F7 branch.
+      f7BranchEntries++;
+#endif
       vistaSerial->setBaud(4800);
       gidx = 0;
 
