@@ -89,6 +89,19 @@ volatile uint32_t deactivatedDuringLastF7Read = 0;
 // snapshot) for what this answers.
 volatile uint32_t edgesDuringLastF7Read = 0;
 
+// Counts entries into either ACK-slot TX block in rxHandleISR() (fault-queue
+// ack and outgoing-keypress ack) -- i.e. real occurrences of the up-to-3-write,
+// up-to-~6ms window where vistaSerial->write() blocks with global interrupts
+// disabled. Now that PIO RX is disabled (VISTA_RP2040_USE_PIO_RX 0), the
+// software bit-bang decoder has no hardware FIFO to fall back on during that
+// window -- unlike PIO, which kept sampling regardless of interrupt state, the
+// plain interrupt-driven decoder needs a live ISR to catch each bit edge, so
+// any real edge landing in this blind spot is unrecoverable. Snapshotting this
+// across an F7 read (ackSlotTxDuringLastF7Read) tests whether ACK-slot TX
+// events landing mid-frame correlate with truncated F7 payload captures.
+volatile uint32_t ackSlotBlockingTxCount = 0;
+volatile uint32_t ackSlotTxDuringLastF7Read = 0;
+
 // arduino-pico's attachInterrupt() has no arg-passing variant (unlike
 // ESP8266/ESP32's attachInterruptArg). Since this firmware only ever runs
 // one Vista instance, route through the same file-scope instance pointer
@@ -1410,6 +1423,9 @@ void IRAM_ATTR Vista::rxHandleISR()
 
       if (ackAddr > 0 && ackAddr < 24)
       {
+#if defined(USE_RP2040)
+        ackSlotBlockingTxCount++;
+#endif
         vistaSerial->write(addrToBitmask1(ackAddr), false, 4800);
 #if defined(USE_RP2040)
         // Bench evidence: F7 long reads captured zero bytes beyond the
@@ -1466,6 +1482,9 @@ void IRAM_ATTR Vista::rxHandleISR()
             _outbuf[_outbufIdx].count++;
           
           if (ackAddr > 0 && ackAddr < 24) {
+#if defined(USE_RP2040)
+            ackSlotBlockingTxCount++;
+#endif
             vistaSerial->write(addrToBitmask1(ackAddr), false, 4800);
 #if defined(USE_RP2040)
             // See the identical comment on the other addrToBitmask1/2/3
@@ -2028,10 +2047,20 @@ bool Vista::handle()
       uint32_t pumpedBeforeF7Read = pioPumpedTotal;
       uint32_t deactivatesBeforeF7Read = pioDeactivateCount;
       uint32_t edgesBeforeF7Read = rxEdgeCountRP2040;
+      // Tests the leading hypothesis with PIO disabled: the ACK-slot branch
+      // in rxHandleISR() can block for up to ~6ms (up to 3 back-to-back
+      // vistaSerial->write() calls) with global interrupts disabled. PIO had
+      // a hardware FIFO that kept sampling through that window regardless;
+      // the plain interrupt-driven decoder has nothing, so a real bit edge
+      // landing in that blind spot is unrecoverable. If ackSlotTxDuringLastF7Read
+      // is nonzero on reads that capture few/no payload bytes, this window is
+      // the culprit.
+      uint32_t ackSlotTxBeforeF7Read = ackSlotBlockingTxCount;
       readChars(F7_MESSAGE_LENGTH - 1, _cbuf, &gidx);
       pumpedDuringLastF7Read = pioPumpedTotal - pumpedBeforeF7Read;
       deactivatedDuringLastF7Read = pioDeactivateCount - deactivatesBeforeF7Read;
       edgesDuringLastF7Read = rxEdgeCountRP2040 - edgesBeforeF7Read;
+      ackSlotTxDuringLastF7Read = ackSlotBlockingTxCount - ackSlotTxBeforeF7Read;
 #else
       readChars(F7_MESSAGE_LENGTH - 1, _cbuf, &gidx);
 #endif

@@ -67,6 +67,8 @@ extern volatile uint32_t pumpedDuringLastF7Read;
 extern volatile uint32_t pioDeactivateCount;
 extern volatile uint32_t deactivatedDuringLastF7Read;
 extern volatile uint32_t edgesDuringLastF7Read;
+extern volatile uint32_t ackSlotBlockingTxCount;
+extern volatile uint32_t ackSlotTxDuringLastF7Read;
 #endif
 
 

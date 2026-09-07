@@ -248,7 +248,9 @@ void loop() {
                     " lastF7Pumped=" + String(pumpedDuringLastF7Read) +
                     " deactivates=" + String(pioDeactivateCount) +
                     " lastF7Deactivates=" + String(deactivatedDuringLastF7Read) +
-                    " lastF7Edges=" + String(edgesDuringLastF7Read));
+                    " lastF7Edges=" + String(edgesDuringLastF7Read) +
+                    " ackSlotTx=" + String(ackSlotBlockingTxCount) +
+                    " lastF7AckSlotTx=" + String(ackSlotTxDuringLastF7Read));
 #endif
     lastHeartbeatMs = millis();
   }
