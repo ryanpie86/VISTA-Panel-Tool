@@ -1329,10 +1329,22 @@ void IRAM_ATTR Vista::rxHandleISR()
   else
   {
 
+#if defined(USE_RP2040)
+    // See _f7LongReadActive's declaration in vista.h: skip this timeout
+    // while the main thread is actively polling for the current F7
+    // frame's bytes, since this ISR's own edge timing is exactly what
+    // bench testing showed becoming unreliable under bus load -- the
+    // same failure mode PIO exists to work around for byte data.
+    if (_highTime && micros() - _highTime > 6000 && _rxState == sNormal && !_f7LongReadActive) {
+
+      _rxState = sPolling;
+    }
+#else
     if (_highTime && micros() - _highTime > 6000 && _rxState == sNormal) {
 
       _rxState = sPolling;
     }
+#endif
     if (_rxState == sCmdHigh) // end 2400 baud cmd preamble
       _rxState = sNormal;
 
@@ -1802,7 +1814,16 @@ bool Vista::handle()
       gidx = 0;
 
       _cbuf[gidx++] = x;
+#if defined(USE_RP2040)
+      // See _f7LongReadActive's declaration in vista.h -- tells
+      // rxHandleISR() this specific long read is in flight so it won't
+      // false-bail sNormal (and disable PIO with it) on a timing hiccup.
+      _f7LongReadActive = true;
       readChars(F7_MESSAGE_LENGTH - 1, _cbuf, &gidx);
+      _f7LongReadActive = false;
+#else
+      readChars(F7_MESSAGE_LENGTH - 1, _cbuf, &gidx);
+#endif
 
       if (!validChksum(_cbuf, 0, gidx) )
         _cbuf[12] = 0x77;

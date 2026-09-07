@@ -99,25 +99,39 @@ non-fatal (logs a warning, keeps the byte anyway), so skipping it entirely
 in PIO loses no real protection.
 
 Scope is deliberately narrow: **only** the primary RX pin (Yellow/GP26)
-uses PIO. The bus-level protocol state machine in `Vista::rxHandleISR()`
-(preamble detection, ACK-slot timing, `_rxState` transitions) is
-completely untouched -- it operates on millisecond-scale thresholds and
-has never shown a problem, so rewriting it would have been risk for no
-benefit. The Green monitor pin (GP28) and TX both still use the original
+uses PIO. The Green monitor pin (GP28) and TX both still use the original
 software bit-bang path; neither has shown this failure, so neither was
 touched.
 
-**This PIO code has not been bench-verified against live bus traffic
-yet** -- everything up to this point in the file (the RP2040 interrupt/
-timing patches) was iterated against real scope captures and live bus
-traffic; the PIO program's *logic* is a first-pass implementation written
-to be correct by design (reusing proven SDK reference logic wherever
-possible, falling back to the original software path automatically if the
-PIO state-machine claim fails), but has not itself been proven against
-real ECP frames yet. If `RAWF7` dumps come back garbled or still
-truncated, check the PIO program's cycle counts and clock-divider math
-first, in `ecp_uart_rx.pio` and `Vista::pioRxInit()`, before assuming the
-underlying approach is wrong.
+PIO's enable/disable state is gated directly off `Vista::rxHandleISR()`'s
+existing `_rxState` bus-protocol state machine (preamble detection,
+ACK-slot timing) -- PIO itself can't tell a genuine ~208us start bit from
+the bus's multi-millisecond preamble/ACK pulses, so it's only allowed to
+run during `_rxState==sNormal` (the real data window), reset cleanly
+(FIFOs cleared, restarted at the program's first instruction) every time
+that window opens.
+
+Live-traffic bench testing (real Vista-20P, concurrent keypad activity)
+found one more failure mode in that gating: the `_highTime > 6000us`
+check `rxHandleISR()` uses to recover from `sNormal` if a frame stalls is
+itself edge-interrupt-driven, and under heavy bus load (frequent F0
+polls) its own edge servicing can lag enough to look like a 6ms+ gap
+occurred mid-frame even though PIO, sampling in hardware, was still
+receiving real bytes the whole time -- disabling PIO partway through an
+F7 frame and truncating it (observed consistently around byte 12-13 of
+45). `Vista::_f7LongReadActive` (set only around the F7 payload's long
+`readChars()` call) tells that check to stand down for the duration,
+since the long read's own 20ms poll-loop timeout is what should decide
+whether the frame actually stalled, not edge timing that's known to be
+unreliable under exactly this load. The ordinary short-frame recovery
+that check exists for elsewhere is untouched.
+
+If `RAW`/`RAWF7` dumps still come back truncated after this fix, suspect
+the same class of problem elsewhere in the `_rxState` machine before
+assuming the PIO program itself (`ecp_uart_rx.pio`, `Vista::pioRxInit()`)
+is wrong -- its cycle counts and clock-divider math were verified against
+a real oscilloscope capture and haven't been the source of truncation in
+testing so far.
 
 ## PIO code generation
 
