@@ -116,7 +116,7 @@ ADC-capable pins (GP26-29) are broken out on this board, resolving the
 
 | Signal | Pin | Notes |
 |---|---|---|
-| Yellow (panel TX → RP2040 RX, through the 33K/10K divider) | **GP26** (ADC0) | Digital input mode. **Confirmed via the Vista-20P technician manual** — see "Still open" item 1: this doc briefly had Yellow/Green swapped based on a bench observation that turned out to be a correlation error, corrected back once the manual settled it |
+| Yellow (panel TX → RP2040 RX, through the 39K/10K divider) | **GP26** (ADC0) | Digital input mode. **Confirmed via the Vista-20P technician manual** — see "Still open" item 1: this doc briefly had Yellow/Green swapped based on a bench observation that turned out to be a correlation error, corrected back once the manual settled it |
 | Green (RP2040 TX → panel, drives the NPN base) | **GP27** (ADC1) | Digital output — resolves the old GPIO_26 dual-assignment conflict. Base transistor: 2N2222, 1kΩ base resistor (see "Still open" item 1 for the sizing) |
 | Green bus-monitor tap (separate divider, per esphome-vistaECP's `MONITORTX` feature) | **GP28** (ADC2) | Digital input — passively decodes *other* devices' traffic on Green (other keypads, zone expanders, RF receiver modules) that the RP2040 wouldn't otherwise see; not collision detection on the RP2040's own TX. Feeds the future "Wireless (RF) zone visibility" / datalogger-role work in `CONCEPT.md`, not required for near-term ECP read/write |
 | Status LED (WS2812) | **GP16**, internal | Hardwired on-board, not a header pin — nothing to wire |
@@ -389,6 +389,27 @@ Vista panel keypad bus (4-wire ECP)
      Fluke DMM — repeatedly, cleanly, no clipping. Through the 33K/10K
      divider: 13.8V × (10k/43k) ≈ **3.21V** at GP26, comfortably under the
      RP2040's 3.6V absolute max (~11% headroom). No clamp diode needed.
+   - **Divider retuned to 39K/10K for more headroom.** 33K/10K was a
+     borrowed starting point (esphome-vistaECP's own published value, per
+     the bullet above) rather than something derived from this project's
+     own measured numbers. Now that Yellow's real behavior is confirmed
+     (13.8V typical, ~14V worst-case AUX), there's no reason to keep
+     inherited numbers where better ones are cheap: **R1=39KΩ, R2=10KΩ**
+     (ratio ≈20.4%, still standard E12 values) puts GP26 at ≈2.82V at the
+     confirmed 13.8V and ≈2.86V at worst-case 14V AUX — **~20.6% headroom**
+     under the 3.6V absolute max, roughly double the 33K/10K figure, and
+     it keeps the divider output under the RP2040's own 3.3V VDD rail even
+     at worst case (avoids biasing the GPIO's input clamp diode under
+     normal operation, not just staying under the absolute-max spec).
+     Pushing the ratio further (e.g. 47K/10K) would buy even more headroom
+     on the high side but starts costing margin on the low side — at a
+     sagging ~10V AUX (weak transformer, battery-only operation), 47K/10K
+     would land around 2.1V, getting close to a typical 3.3V-logic
+     VIH threshold (~70% of VDD, ≈2.3V, though worth checking the
+     RP2040 datasheet's exact spec before relying on that number).
+     39K/10K keeps ≈2.04V even at a 10V AUX low case, comfortable margin
+     on both ends. **R1/R2 = 39K/10K**, superseding the 33K/10K adoption
+     above.
    - **Q1 and R_B confirmed, using the correct line:** 2N2222 for Q1 (user
      has stock on hand), 1kΩ for R_B. Green (the transistor's actual line)
      is quiet during ordinary keypad activity (sub-volt blips — a Fluke
