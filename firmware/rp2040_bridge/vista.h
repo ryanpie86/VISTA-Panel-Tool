@@ -221,6 +221,13 @@ public:
     void txHandleISR();
     bool areEqual(char *, char *, uint8_t);
     bool keybusConnected, connected;
+    // Bench diagnostic (VISTA-Panel-Tool): SoftwareSerial::overflow() is
+    // private to vistaSerial, which is itself a private member here --
+    // expose it so the sketch can check whether the main-loop-driven
+    // readChars() is draining the ISR-filled ring buffer fast enough
+    // during a long (44-byte) F7 read. Clears the underlying sticky flag
+    // on read, same as SoftwareSerial::overflow() itself.
+    bool rxOverflow();
     int toDec(int);
     void resetStatus();
     void initSerialHandlers(int, int, int);

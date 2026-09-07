@@ -348,6 +348,11 @@ void Vista::onDisplay(char cbuf[], int *idx)
   statusFlags.prompt2[16] = 0;
 }
 
+bool Vista::rxOverflow()
+{
+  return vistaSerial ? vistaSerial->overflow() : false;
+}
+
 int Vista::toDec(int n)
 {
   char b[4];
