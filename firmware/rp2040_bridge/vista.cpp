@@ -105,6 +105,14 @@ void Vista::pioRxInit()
   sm_config_set_in_shift(&c, true /* shift right, LSB first */, true /* autopush */, 8 /* threshold */);
   float div = (float)clock_get_hz(clk_sys) / (8.0f * 4800.0f);
   sm_config_set_clkdiv(&c, div);
+  // This program never transmits, so its TX FIFO is otherwise dead
+  // weight -- joining it to RX doubles the buffer PIO can hold (4 words
+  // -> 8) before autopush stalls the state machine waiting for room.
+  // Cheap extra headroom on top of draining the FIFO from inside
+  // rxHandleISR()'s blocking ACK-TX sequence (see the pioRxPump() calls
+  // there) -- this alone wouldn't fix that problem, since 8 words is
+  // still only ~2ms more at this baud rate, but it costs nothing to add.
+  sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_RX);
 
   pio_gpio_init(s_ecpPio, (uint)_rxPin);
   pio_sm_set_consecutive_pindirs(s_ecpPio, s_ecpSm, (uint)_rxPin, 1, false);
@@ -1264,12 +1272,36 @@ void IRAM_ATTR Vista::rxHandleISR()
       if (ackAddr > 0 && ackAddr < 24)
       {
         vistaSerial->write(addrToBitmask1(ackAddr), false, 4800);
+#if defined(USE_RP2040)
+        // Bench evidence: F7 long reads still captured zero bytes beyond
+        // the opcode even after PIO was kept active across _rxState
+        // excursions (see _f7LongReadActive) -- because the real problem
+        // here is different. This whole branch runs inside a hardware
+        // ISR with global interrupts disabled (disableInterrupts() at
+        // the top of rxHandleISR()), and each vistaSerial->write() below
+        // blocks for a full bit-banged byte time (~2ms at 4800 baud).
+        // While that runs, the main-thread readChars() loop -- the only
+        // other place pioRxPump() is called -- can't run at all, since
+        // it's preempted by this same ISR on this single core. PIO's RX
+        // FIFO is only 4 words deep, so a few back-to-back blocking
+        // writes here (up to 3, ~6ms) is enough to stall it outright.
+        // Draining between each write keeps the FIFO from ever filling
+        // during this window, independent of whatever readChars() can
+        // do once the ISR finally returns.
+        pioRxPump();
+#endif
         b = addrToBitmask2(ackAddr);
         if (b)
           vistaSerial->write(b, false, 4800);
+#if defined(USE_RP2040)
+        pioRxPump();
+#endif
         b = addrToBitmask3(ackAddr);
         if (b)
           vistaSerial->write(b, false, 4800);
+#if defined(USE_RP2040)
+        pioRxPump();
+#endif
       }
       else if (_outbufIdx != _inbufIdx || _retries)
       {
@@ -1297,12 +1329,24 @@ void IRAM_ATTR Vista::rxHandleISR()
           
           if (ackAddr > 0 && ackAddr < 24) {
             vistaSerial->write(addrToBitmask1(ackAddr), false, 4800);
+#if defined(USE_RP2040)
+            // See the identical comment on the other addrToBitmask1/2/3
+            // triplet above -- same blocking-ISR-starves-PIO's-FIFO
+            // problem, same fix.
+            pioRxPump();
+#endif
             b = addrToBitmask2(ackAddr);
             if (b)
               vistaSerial->write(b, false, 4800);
+#if defined(USE_RP2040)
+            pioRxPump();
+#endif
             b = addrToBitmask3(ackAddr);
             if (b)
               vistaSerial->write(b, false, 4800);
+#if defined(USE_RP2040)
+            pioRxPump();
+#endif
             _pendingAck=true;
 
           }

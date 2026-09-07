@@ -126,11 +126,31 @@ whether the frame actually stalled, not edge timing that's known to be
 unreliable under exactly this load. The ordinary short-frame recovery
 that check exists for elsewhere is untouched.
 
-If `RAW`/`RAWF7` dumps still come back truncated after this fix, suspect
-the same class of problem elsewhere in the `_rxState` machine before
-assuming the PIO program itself (`ecp_uart_rx.pio`, `Vista::pioRxInit()`)
-is wrong -- its cycle counts and clock-divider math were verified against
-a real oscilloscope capture and haven't been the source of truncation in
+That gating fix alone didn't finish the job -- the next bench round still
+showed F7 long reads capturing zero bytes beyond the opcode, identical to
+before. The actual remaining cause: `rxHandleISR()`'s `_lowTime > 9000`
+ACK-opportunity branch (also where this firmware's own pending key-ack
+bits get transmitted) can call `vistaSerial->write()` up to three times
+back-to-back, each blocking for a full bit-banged byte (~2ms at 4800
+baud) -- and it does this from inside a real hardware interrupt handler,
+with global interrupts disabled for the whole branch
+(`disableInterrupts()`/`restoreInterrupts()` bracket all of
+`rxHandleISR()`). While that runs, the main-thread `readChars()` polling
+loop -- the only other place `pioRxPump()` was being called -- can't run
+at all on this single core, so PIO's RX FIFO (4 words deep) fills and
+stalls (autopush blocks once full) within a few back-to-back writes,
+independent of whether PIO is gated "on" at the time. Fixed by calling
+`pioRxPump()` between each of those blocking writes, draining the FIFO
+from inside the same ISR that's starving the main thread, plus joining
+PIO's unused TX FIFO to RX (`sm_config_set_fifo_join`, 4 words -> 8) as
+cheap extra headroom on top of that.
+
+If `RAW`/`RAWF7` dumps still come back truncated after this, suspect the
+same class of problem -- something in `rxHandleISR()` blocking long
+enough to starve PIO's FIFO of draining -- before assuming the PIO
+program itself (`ecp_uart_rx.pio`, `Vista::pioRxInit()`) is wrong; its
+cycle counts and clock-divider math were verified against a real
+oscilloscope capture and haven't been the source of truncation in
 testing so far.
 
 ## PIO code generation
