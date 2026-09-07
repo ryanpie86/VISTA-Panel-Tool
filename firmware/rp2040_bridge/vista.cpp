@@ -410,22 +410,44 @@ void Vista::readChars(int ct, char buf[], int *idx)
   int x = 0;
   int idxval = *idx;
   unsigned long timeout = millis();
+  unsigned long readTimeoutMs = 20;
 #if defined(USE_RP2040)
   bool longRead = (ct >= 20);
   unsigned long startUs = 0;
   if (longRead) {
     longReadAttempts++;
     startUs = micros();
+    // Bench evidence: F7 long reads (44 bytes after the opcode) have a
+    // 100% failure rate across every attempt this whole investigation,
+    // even on attempts where PIO is confirmed still correctly enabled
+    // and sampling, with real bus edges nearby, right up to and including
+    // the point this read gives up. Every lower-level cause found so far
+    // (forwarding-gate gap, ring-buffer race, ISR-blocking FIFO
+    // starvation, PIO's bit-phase desyncing across an ACK-slot excursion)
+    // has been fixed without changing this outcome. One untested
+    // possibility: this bus's F7 broadcast (docs: ~100ms for the full
+    // 44 bytes, i.e. ~2.3ms/byte on average) may have a longer one-time
+    // processing gap between the opcode announcement and the actual
+    // start of payload streaming than the 20ms inter-byte timeout below
+    // allows for, even if consecutive payload bytes themselves arrive
+    // well within it once streaming starts. `timeout` only resets when a
+    // byte is actually read, so widening this for long reads only costs
+    // extra blocking in the exact all-idle failure case already being
+    // hit (a one-time wait, not per-byte -- the loop exits entirely once
+    // this elapses with nothing read at all); a successful read is
+    // unaffected either way since it keeps resetting the clock. Ordinary
+    // short reads elsewhere in this class keep the original 20ms.
+    readTimeoutMs = 100;
   }
 #endif
-  while (x < ct && millis() - timeout < 20)
+  while (x < ct && millis() - timeout < readTimeoutMs)
   {
 #if defined(USE_RP2040)
     if (longRead) longReadPolls++;
     // pioRxPump() otherwise only runs once, at the very top of handle() --
-    // but this loop can block here internally for up to 20ms per call
-    // waiting for more bytes, and nothing else re-drains the PIO FIFO
-    // during that window. Without this, only whatever PIO had already
+    // but this loop can block here internally for up to readTimeoutMs per
+    // gap between bytes, and nothing else re-drains the PIO FIFO during
+    // that window. Without this, only whatever PIO had already
     // buffered before handle() started this call would ever reach
     // vistaSerial's byte buffer, stalling long reads after the first
     // batch. Draining every iteration keeps latency close to what the
