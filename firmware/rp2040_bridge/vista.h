@@ -31,6 +31,13 @@
 #include <queue>
 #include "ECPSoftwareSerial.h"
 
+#if defined(USE_RP2040)
+// Bench diagnostic counters -- see the matching comment above
+// rxISRTrampolineRP2040() in vista.cpp.
+extern volatile uint32_t rxEdgeCountRP2040;
+extern volatile uint32_t txEdgeCountRP2040;
+#endif
+
 
 // #define DEBUG
 

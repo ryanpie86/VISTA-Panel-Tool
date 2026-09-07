@@ -27,18 +27,29 @@ void IRAM_ATTR txISRHandler(void* args)
 #endif
 
 #if defined(USE_RP2040)
+// Bench diagnostic: counts raw GPIO edges the ISR trampoline actually
+// sees, independent of whether Vista ever turns them into a decoded
+// frame. Read from the sketch (extern'd in vista.h) to tell "the
+// interrupt stopped firing" apart from "it's firing fine but the
+// higher-level decode state machine is stuck" when bus activity goes
+// silent after working at least once.
+volatile uint32_t rxEdgeCountRP2040 = 0;
+volatile uint32_t txEdgeCountRP2040 = 0;
+
 // arduino-pico's attachInterrupt() has no arg-passing variant (unlike
 // ESP8266/ESP32's attachInterruptArg). Since this firmware only ever runs
 // one Vista instance, route through the same file-scope instance pointer
 // the constructor already sets, via plain no-arg trampolines.
 void IRAM_ATTR rxISRTrampolineRP2040()
 {
+    rxEdgeCountRP2040++;
     if (pointerToVistaClass != NULL)
         pointerToVistaClass->rxHandleISR();
 }
 #ifdef MONITORTX
 void IRAM_ATTR txISRTrampolineRP2040()
 {
+    txEdgeCountRP2040++;
     if (pointerToVistaClass != NULL)
         pointerToVistaClass->txHandleISR();
 }

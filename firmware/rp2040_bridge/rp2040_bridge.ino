@@ -142,10 +142,18 @@ void setup() {
   Serial.println("BOOT: vista.begin() returned, entering loop()");
 }
 
+static uint32_t framesDecodedCount = 0;  // any cmdAvail() drain, any frame type
+
 void loop() {
   static unsigned long lastHeartbeatMs = 0;
   if (millis() - lastHeartbeatMs > 2000) {
-    Serial.println("ALIVE");
+#if defined(ARDUINO_ARCH_RP2040)
+    Serial.println("ALIVE rxEdges=" + String(rxEdgeCountRP2040) +
+                    " txEdges=" + String(txEdgeCountRP2040) +
+                    " framesDecoded=" + String(framesDecodedCount));
+#else
+    Serial.println("ALIVE framesDecoded=" + String(framesDecodedCount));
+#endif
     lastHeartbeatMs = millis();
   }
 
@@ -170,6 +178,7 @@ void loop() {
       break;
     lastBusActivityMs = millis();
     everSawBusActivity = true;
+    framesDecodedCount++;
     // getNextCmd() surfaces every decoded ECP frame type (routine bus
     // polls, key-acks, expander/LRR/RF/AUI traffic, ...), not just alpha
     // display updates -- they all funnel through the same
