@@ -653,6 +653,22 @@ void SoftwareSerial::rxBits()
     }
 }
 
+bool SoftwareSerial::pushByte(uint8_t b)
+{
+    // Same overflow-checked insertion rxBits() does at the end of its
+    // "2nd stop bit and save byte" branch -- see the comment on the
+    // declaration in ECPSoftwareSerial.h for why this exists.
+    int next = (m_inPos + 1) % m_bufSize;
+    if (next == m_outPos)
+    {
+        m_overflow = true;
+        return false;
+    }
+    m_buffer[m_inPos] = (char)b;
+    m_inPos = next;
+    return true;
+}
+
 void IRAM_ATTR SoftwareSerial::rxRead()
 {
     #if defined(USE_ESP_IDF) or defined(ESP32)

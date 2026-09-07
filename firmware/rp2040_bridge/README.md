@@ -17,9 +17,16 @@ assignments, divider values, and transistor sizing this firmware assumes.
    status LED on GP16.
 4. Open `rp2040_bridge.ino` -- the Arduino IDE will pick up `vista.h`,
    `vista.cpp`, `ECPSoftwareSerial.h`, and `ECPSoftwareSerial.cpp` from the
-   same folder automatically. Compile and upload over USB (BOOTSEL like
-   any other RP2040 board for the first flash; later flashes can go over
-   the same USB-serial port).
+   same folder automatically. It will also pick up `ecp_uart_rx.pio` and
+   run arduino-pico's built-in `pioasm` step to generate
+   `ecp_uart_rx.pio.h` -- this is a documented arduino-pico feature (any
+   `.pio` file in the sketch folder gets auto-assembled at build time),
+   but hasn't been build-verified on real hardware in this environment; if
+   the build can't find `ecp_uart_rx.pio.h`, check that the installed
+   arduino-pico version actually supports this before assuming the PIO
+   code itself is wrong.
+5. Compile and upload over USB (BOOTSEL like any other RP2040 board for
+   the first flash; later flashes can go over the same USB-serial port).
 
 ## What's vendored vs. written here
 
@@ -44,6 +51,33 @@ for RP2040/arduino-pico; every change is marked with a comment starting
   `attachInterrupt()` with a no-arg trampoline that reads the same
   file-scope instance pointer the constructor already sets
   (`pointerToVistaClass`).
+- `IRAM_ATTR` on RP2040 was upstream's own no-op hook -- meaning the
+  interrupt-driven bit-sampling functions ran from flash (XIP) instead of
+  RAM, unlike ESP8266 where `IRAM_ATTR` is load-bearing for exactly that
+  timing guarantee. Redefined to `__attribute__((section(".time_critical")))`,
+  which the Pico SDK's linker script pulls into RAM (same mechanism the
+  SDK's own `__not_in_flash_func()` uses). `digitalRead()` in the two
+  ISR-path reads was also swapped for the Pico SDK's direct `gpio_get()`.
+  Neither change was enough on its own -- see the PIO section below.
+- **Primary RX byte assembly moved off the software bit sampler entirely,
+  onto a PIO state machine** (`ecp_uart_rx.pio`, wired up by
+  `Vista::pioRxInit()`/`pioRxPump()` in `vista.cpp`, new methods not
+  present upstream). Bench testing showed the original interrupt-driven
+  software decoder reliably loses sync partway through the one long
+  (44-byte, ~100ms) F7 status frame specifically once real bus traffic
+  (e.g. a physical keypad in active use) overlaps it -- consistent with
+  an occasional missed GPIO edge under CPU/interrupt load, something
+  `IRAM_ATTR`/`gpio_get()` alone measurably didn't fix. PIO samples GPIO
+  with dedicated hardware timing, independent of whatever the CPU is
+  doing, which removes that failure mode rather than reducing its odds.
+  See "PIO-based RX" below for how this is scoped and wired in.
+  `pushByte()` (new, in `ECPSoftwareSerial.h`/`.cpp`) is the hand-off
+  point: it does the exact same overflow-checked insertion `rxBits()`
+  already did into `SoftwareSerial`'s byte buffer, so `available()`/
+  `read()`/`overflow()` and everything downstream of them (`readChars()`,
+  `decodePacket()`, the whole rest of `vista.cpp`) are completely
+  unchanged and can't tell whether a byte came from PIO or the software
+  path.
 
 Everything else in those four files -- the actual bit-timing (interrupt +
 `micros()`-driven, portable), framing, and protocol decode -- needed no
@@ -52,6 +86,43 @@ changes; it was already written against the generic Arduino API.
 `rp2040_bridge.ino` is new: it wires the vendored `Vista` class to the
 `SERIAL_PROTOCOL.md` line protocol (`KEY`/`PING` in, `ACK`/`DISP`/`ERR`/
 `PONG` out).
+
+## PIO-based RX
+
+`ecp_uart_rx.pio` is a new file (not from upstream) implementing this
+bus's actual framing (4800 baud, 8 data bits, even parity, 2 stop bits --
+confirmed by oscilloscope cursor timing: one 12-bit byte at 4800 baud is
+~2.5ms, matching a measured 2.46ms inter-byte span to within 2%). Its
+"wait for start bit / center on first data bit / shift in 8 bits" front
+half is reused unmodified from the Pico SDK's own `uart_rx.pio` reference
+example; only the tail differs, to skip the parity bit + 2nd stop bit
+(this bus's framing, not 8-N-1) rather than checking a single stop bit.
+Parity is deliberately not validated in PIO -- matching how the existing
+software decoder's own `checkParity()` already treats a mismatch as
+non-fatal (logs a warning, keeps the byte anyway), so skipping it entirely
+in PIO loses no real protection.
+
+Scope is deliberately narrow: **only** the primary RX pin (Yellow/GP26)
+uses PIO. The bus-level protocol state machine in `Vista::rxHandleISR()`
+(preamble detection, ACK-slot timing, `_rxState` transitions) is
+completely untouched -- it operates on millisecond-scale thresholds and
+has never shown a problem, so rewriting it would have been risk for no
+benefit. The Green monitor pin (GP28) and TX both still use the original
+software bit-bang path; neither has shown this failure, so neither was
+touched.
+
+**This PIO code has not been bench-verified on real hardware yet** --
+everything up to this point in the file (the RP2040 interrupt/timing
+patches) was iterated against real scope captures and live bus traffic;
+this is a first-pass implementation written to be correct by design
+(reusing proven SDK reference logic wherever possible, falling back to
+the original software path automatically if the PIO state-machine claim
+fails) but hand-written PIO assembly is exactly the kind of code that
+tends to need at least one real bench round to get bit-perfect. If `RAWF7`
+dumps come back garbled or still truncated after this, check the PIO
+program's cycle counts and clock-divider math first, in `ecp_uart_rx.pio`
+and `Vista::pioRxInit()`, before assuming the underlying approach is
+wrong.
 
 ## Current limitations (breadboard bring-up stage)
 

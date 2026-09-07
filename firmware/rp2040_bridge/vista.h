@@ -259,6 +259,24 @@ private:
 #endif
     static void disableInterrupts();
     static void restoreInterrupts();
+#if defined(USE_RP2040)
+    // See ecp_uart_rx.pio: moves byte assembly for the primary RX pin
+    // (Yellow/_rxPin) off the CPU-interrupt-driven software bit sampler
+    // and onto a PIO state machine, which samples GPIO with hardware
+    // timing immune to CPU load -- bench-confirmed necessary since the
+    // software path reliably loses sync once real bus traffic (e.g. a
+    // physical keypad in use) overlaps a long read. Drains the PIO RX
+    // FIFO into vistaSerial's existing byte buffer via pushByte(),
+    // gated by the same _rxState/_highTime check rxHandleISR() already
+    // used before calling vistaSerial->rxRead() -- PIO free-runs
+    // regardless of bus state, so bytes framed during a poll/preamble/ACK
+    // window (not real data) are drained and discarded rather than fed
+    // to the decoder. The Green monitor pin and TX are untouched -- both
+    // still use the original software path, since neither has shown this
+    // problem.
+    void pioRxInit();
+    void pioRxPump();
+#endif
     SoftwareSerial *vistaSerial, *vistaSerialMonitor;
     bool _newExtCmd, _newCmd;
     bool _filterOwnTx;
