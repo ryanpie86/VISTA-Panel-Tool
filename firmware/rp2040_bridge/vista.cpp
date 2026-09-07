@@ -209,7 +209,17 @@ void Vista::pioRxPump()
     // pioRxSetActive()), but this mirrors the same gate rxHandleISR()
     // used before calling vistaSerial->rxRead() in the software path, in
     // case a byte was already in the FIFO right at a state transition.
-    if (_rxState == sNormal || _highTime == 0)
+    //
+    // _f7LongReadActive needs the same OR here that pioRxSetActive()'s
+    // caller already gets (see rxHandleISR()): that flag keeps PIO
+    // physically sampling through a _rxState excursion mid-F7-read (the
+    // 9ms ACK slot bouncing _rxState to sPolling without actually ending
+    // the frame), but without it also covering THIS gate, every byte PIO
+    // still correctly captures during that excursion was being silently
+    // dropped right here instead of reaching vistaSerial -- explaining
+    // exactly what rawF7ByteSeen vs. F7valid showed on the bench: PIO
+    // sees the opcode fine, the payload still never arrives.
+    if (_rxState == sNormal || _highTime == 0 || _f7LongReadActive)
       vistaSerial->pushByte(b);
   }
   restore_interrupts(savedIrq);
