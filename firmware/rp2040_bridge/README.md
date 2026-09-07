@@ -17,14 +17,10 @@ assignments, divider values, and transistor sizing this firmware assumes.
    status LED on GP16.
 4. Open `rp2040_bridge.ino` -- the Arduino IDE will pick up `vista.h`,
    `vista.cpp`, `ECPSoftwareSerial.h`, and `ECPSoftwareSerial.cpp` from the
-   same folder automatically. It will also pick up `ecp_uart_rx.pio` and
-   run arduino-pico's built-in `pioasm` step to generate
-   `ecp_uart_rx.pio.h` -- this is a documented arduino-pico feature (any
-   `.pio` file in the sketch folder gets auto-assembled at build time),
-   but hasn't been build-verified on real hardware in this environment; if
-   the build can't find `ecp_uart_rx.pio.h`, check that the installed
-   arduino-pico version actually supports this before assuming the PIO
-   code itself is wrong.
+   same folder automatically, along with `ecp_uart_rx.pio.h` (see "PIO
+   code generation" below -- committed pre-built, not auto-generated from
+   `ecp_uart_rx.pio` at build time; that was tried first and didn't work
+   on at least one real toolchain).
 5. Compile and upload over USB (BOOTSEL like any other RP2040 board for
    the first flash; later flashes can go over the same USB-serial port).
 
@@ -111,18 +107,37 @@ benefit. The Green monitor pin (GP28) and TX both still use the original
 software bit-bang path; neither has shown this failure, so neither was
 touched.
 
-**This PIO code has not been bench-verified on real hardware yet** --
-everything up to this point in the file (the RP2040 interrupt/timing
-patches) was iterated against real scope captures and live bus traffic;
-this is a first-pass implementation written to be correct by design
-(reusing proven SDK reference logic wherever possible, falling back to
-the original software path automatically if the PIO state-machine claim
-fails) but hand-written PIO assembly is exactly the kind of code that
-tends to need at least one real bench round to get bit-perfect. If `RAWF7`
-dumps come back garbled or still truncated after this, check the PIO
-program's cycle counts and clock-divider math first, in `ecp_uart_rx.pio`
-and `Vista::pioRxInit()`, before assuming the underlying approach is
-wrong.
+**This PIO code has not been bench-verified against live bus traffic
+yet** -- everything up to this point in the file (the RP2040 interrupt/
+timing patches) was iterated against real scope captures and live bus
+traffic; the PIO program's *logic* is a first-pass implementation written
+to be correct by design (reusing proven SDK reference logic wherever
+possible, falling back to the original software path automatically if the
+PIO state-machine claim fails), but has not itself been proven against
+real ECP frames yet. If `RAWF7` dumps come back garbled or still
+truncated, check the PIO program's cycle counts and clock-divider math
+first, in `ecp_uart_rx.pio` and `Vista::pioRxInit()`, before assuming the
+underlying approach is wrong.
+
+## PIO code generation
+
+`ecp_uart_rx.pio.h` is committed directly rather than relying on
+arduino-pico's documented "auto-assemble any `.pio` file in the sketch
+folder" build step -- that was the original plan, but it produced a plain
+"No such file or directory" on `ecp_uart_rx.pio.h` on a real Arduino IDE
+toolchain during bench testing, so it isn't being relied on. If your setup
+*does* support it, delete the committed `ecp_uart_rx.pio.h` (or make sure
+your build doesn't see both a generated and a committed copy at once).
+
+The committed header's instruction encoding is **not hand-written** --
+it's the verified output of the real Raspberry Pi pico-sdk `pioasm` tool,
+built from source for this purpose (`tools/pioasm` in the `pico-sdk` repo;
+it's a host-native C++/CMake project needing only `bison`+`flex`, no ARM
+cross-toolchain) and run against `ecp_uart_rx.pio` directly, then trimmed
+to the long-stable `pio_program` struct fields
+(`instructions`/`length`/`origin`) for broad SDK-version compatibility --
+see the comment at the top of the file for the exact regeneration command
+if `ecp_uart_rx.pio` ever changes.
 
 ## Current limitations (breadboard bring-up stage)
 
