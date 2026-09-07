@@ -277,24 +277,26 @@ private:
     // problem.
     void pioRxInit();
     void pioRxPump();
-    // Bench evidence (live-traffic capture, F7 reads consistently stalling
-    // ~12-13 bytes into the 45-byte frame, 100% of long-read attempts
-    // timing out): rxHandleISR()'s own sNormal->sPolling bailout
-    // (_highTime > 6000us, below) is itself edge-interrupt-driven and can
-    // be fooled by the exact same missed/coalesced-GPIO-IRQ problem PIO
-    // was introduced to work around for byte *data* -- under heavy bus
-    // load (e.g. frequent F0 polls) the RX pin's falling edges can be
-    // serviced late enough that _highTime looks like it exceeded 6ms even
-    // though PIO, sampling in hardware, kept receiving real bytes the
-    // whole time. Because PIO is gated directly off _rxState, that false
-    // timeout disables PIO mid-frame and the rest of the payload is lost.
-    // This flag, set only around the F7 long read in the main-thread
-    // handle() path, tells rxHandleISR() "we are actively polling for
-    // this frame's bytes right now" so it can ignore that timeout for the
-    // duration instead of trusting a measurement known to be unreliable
-    // under load. Confined to the one long read that showed the problem;
-    // the ordinary short-frame recovery this timeout exists for is
-    // untouched.
+    // Bench evidence (live-traffic capture, F7 long reads consistently
+    // capturing zero bytes beyond the opcode, 100% of attempts): several
+    // paths in rxHandleISR()'s bus-protocol state machine can legitimately
+    // knock _rxState out of sNormal mid-frame -- most notably the ~9ms+
+    // ACK-opportunity slot, which is a normal, frequent part of the real
+    // protocol and unconditionally forces _rxState = sPolling regardless
+    // of what state we were in. Since PIO is gated directly off _rxState,
+    // any one of these lands PIO's plug being pulled within the first few
+    // ms of nearly every F7 payload, before a second byte can arrive.
+    // Those transitions (ACK-slot handling in particular) do real work
+    // (transmitting our own pending key-ack bits) this flag must not
+    // interfere with, and other code reads _rxState for its own purposes,
+    // so rather than changing what _rxState becomes, this flag only
+    // overrides the separate "should PIO be on" decision derived from it.
+    // Set only around the F7 long read in the main-thread handle() path,
+    // it tells that one decision point "we are actively polling for this
+    // frame's bytes right now, so treat any _rxState excursion during
+    // this window as incidental, not a real end-of-frame." Confined to
+    // the one long read that showed the problem; the ordinary short-frame
+    // recovery this state machine exists for is untouched.
     volatile bool _f7LongReadActive = false;
 #endif
     SoftwareSerial *vistaSerial, *vistaSerialMonitor;
