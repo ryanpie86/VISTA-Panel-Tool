@@ -47,6 +47,8 @@ extern volatile uint32_t nearF7ByteSeen;
 extern volatile uint32_t pioPumpedTotal;
 extern volatile uint32_t pioForwardedTotal;
 extern volatile uint32_t pumpedDuringLastF7Read;
+extern volatile uint32_t pioDeactivateCount;
+extern volatile uint32_t deactivatedDuringLastF7Read;
 #endif
 
 
