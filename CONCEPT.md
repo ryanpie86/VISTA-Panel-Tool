@@ -340,7 +340,7 @@ Carried forward from earlier discussion, still unresolved:
    would need to be added explicitly to the RP2040 firmware (not inherited
    for free from the non-isolated bus tap). Relevant to the stationary
    datalogger role; not part of near-term zone-discovery/read-write scope.
-   The RP2040-Zero's Green bus-monitor tap (GP28, see
+   The RP2040-Zero's Yellow bus-monitor tap (GP28, see
    HARDWARE_ARCHITECTURE.md "Bus coprocessor: RP2040-Zero") is the wiring
    this would build on, per esphome-vistaECP's own `MONITORTX` feature.
 8. **AP/STA switching mechanism** — implementation choice (hostapd +
@@ -394,10 +394,15 @@ Carried forward from earlier discussion, still unresolved:
   UART stopped saving anything and just added a second connection. See
   HARDWARE_ARCHITECTURE.md "RP2040-Zero <-> Pi interconnect".
 - **RP2040-Zero / ECP interface pin mapping**: finalized against the
-  board's actual pinout diagram (Yellow=GP26, Green=GP27, Green
+  board's actual pinout diagram (Green=GP26, Yellow=GP27, Yellow
   bus-monitor tap=GP28, WS2812 LED fixed on GP16), resolving the old
   GPIO_26 dual-assignment conflict. See HARDWARE_ARCHITECTURE.md "Bus
   coprocessor: RP2040-Zero".
+- **Yellow/Green wire roles**: corrected on the bench — Yellow is the
+  keypad→panel (TX) line here, Green is panel→keypad (RX), the reverse of
+  what earlier drafts assumed from esphome-vistaECP's own README. Direct
+  testing on this project's own wiring takes priority over the source
+  project's color labels. See HARDWARE_ARCHITECTURE.md "Still open" item 1.
 - **ESP32-as-host** (replacing the Pi entirely): considered and set
   aside — electrically viable over SPI, but would mean porting the entire
   backend to embedded C, a much bigger lift than deciding the RP2040↔Pi
