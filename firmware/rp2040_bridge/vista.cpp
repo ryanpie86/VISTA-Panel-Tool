@@ -1979,6 +1979,21 @@ bool Vista::handle()
     int num = 12;
     while (i < num && millis() - timeout < 5)
     {
+#if defined(USE_RP2040)
+      // Same reason as the identical call in readChars(): this is a
+      // second, separate hand-rolled poll loop that waits on
+      // vistaSerial->available() without going through readChars(), so
+      // without its own pump() call here nothing drains PIO's RX FIFO
+      // while this loop waits. The RP2040's PIO RX FIFO is only 4 words
+      // deep with autopush enabled, so a few undrained bytes stall the
+      // state machine outright (it blocks pushing once the FIFO is
+      // full) until something reads it again -- losing sync for
+      // whatever real frame is arriving. This path is hit by every
+      // opcode without its own dedicated branch above, including the
+      // high-frequency F0 poll, which is why undraining it here was far
+      // more visible on the bench than the equivalent F7-only bug.
+      pioRxPump();
+#endif
       if (vistaSerial->available())
       {
         timeout = millis();
