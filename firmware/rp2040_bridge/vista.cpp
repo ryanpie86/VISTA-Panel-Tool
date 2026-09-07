@@ -37,6 +37,21 @@ void IRAM_ATTR txISRHandler(void* args)
 volatile uint32_t rxEdgeCountRP2040 = 0;
 volatile uint32_t txEdgeCountRP2040 = 0;
 
+// Bench diagnostic: readChars()'s own poll loop, isolated to "long" reads
+// (ct >= 20, which in practice means only the 44-byte F7 body -- every
+// other frame type reads far fewer bytes per call) so this signal isn't
+// diluted by the much more numerous short reads. Tells us whether the
+// poll loop is running near its expected ~4us/iteration cadence (an
+// interference/starvation problem, e.g. from other code -- possibly this
+// firmware's own diagnostic printing -- hogging the CPU) versus genuinely
+// getting no new bytes at all even though it's polling at full speed (an
+// ISR/edge-loss problem instead).
+volatile uint32_t longReadAttempts = 0;
+volatile uint32_t longReadPolls = 0;
+volatile uint32_t longReadBytes = 0;
+volatile uint32_t longReadTimeouts = 0;
+volatile uint32_t longReadElapsedUs = 0;
+
 // arduino-pico's attachInterrupt() has no arg-passing variant (unlike
 // ESP8266/ESP32's attachInterruptArg). Since this firmware only ever runs
 // one Vista instance, route through the same file-scope instance pointer
@@ -206,15 +221,29 @@ void Vista::readChars(int ct, char buf[], int *idx)
   int x = 0;
   int idxval = *idx;
   unsigned long timeout = millis();
+#if defined(USE_RP2040)
+  bool longRead = (ct >= 20);
+  unsigned long startUs = 0;
+  if (longRead) {
+    longReadAttempts++;
+    startUs = micros();
+  }
+#endif
   while (x < ct && millis() - timeout < 20)
   {
+#if defined(USE_RP2040)
+    if (longRead) longReadPolls++;
+#endif
     if (vistaSerial->available())
     {
       timeout = millis();
       buf[idxval++] = vistaSerial->read();
       x++;
+#if defined(USE_RP2040)
+      if (longRead) longReadBytes++;
+#endif
     }
-#ifdef ESP32 
+#ifdef ESP32
     else
       vTaskDelay(5);
 #else
@@ -222,6 +251,12 @@ void Vista::readChars(int ct, char buf[], int *idx)
      delayMicroseconds(4);
 #endif
   }
+#if defined(USE_RP2040)
+  if (longRead) {
+    longReadElapsedUs += (micros() - startUs);
+    if (x < ct) longReadTimeouts++;
+  }
+#endif
   *idx = idxval;
 }
 
