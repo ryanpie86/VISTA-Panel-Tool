@@ -93,21 +93,25 @@ static unsigned long lastBusFaultReportMs = 0;
 // grepping both the original esphome-components source and our vendored
 // copy. Track real bus activity ourselves instead.
 //
-// Originally this fired on *any* decoded frame, including the catch-all
-// "other" (unrecognized opcode) bucket. That was fine with the old
-// software bit sampler, which rarely survived long enough on pure noise
+// This originally fired on *any* decoded frame, including the catch-all
+// "other" (unrecognized opcode) bucket -- fine with the interrupt-driven
+// software bit sampler, which rarely survives long enough on pure noise
 // (e.g. GP26 floating with the panel powered off) to assemble a complete
-// frame -- but PIO is far more reliable, and bench-confirmed it happily
-// frames ambient noise into a steady stream of garbage "other" frames,
-// keeping this permanently "connected" with no panel attached at all.
-// A random noise byte only needs to coincidentally start with a known
-// opcode (1/256 odds) and pass whatever loose structure that opcode
-// requires -- weak protection. A *valid* F7 frame requires a specific
-// 45-byte structure to pass its checksum, which pure noise essentially
-// never produces by chance -- so only that counts as real activity now.
+// frame. It was narrowed to *valid F7 only* during the PIO-RX experiment,
+// since PIO was bench-confirmed to happily frame ambient noise into a
+// steady stream of garbage "other" frames, keeping this permanently
+// "connected" with no panel attached at all -- a valid F7 needs a specific
+// 45-byte structure to pass its checksum, which noise essentially never
+// produces by chance. PIO RX is now disabled again (VISTA_RP2040_USE_PIO_RX
+// 0 in vista.h) in favor of the interrupt-driven decoder, so that noise-
+// framing risk is gone and the narrowing left this permanently reporting
+// "keybus not detected" on live bus traffic instead (bench-confirmed: F0/F6/
+// F8/F9/other frames decoding continuously while no F7 has yet passed
+// checksum, due to the still-open F7 truncation issue) -- reverted back to
+// any decoded frame, matching the decoder actually in use.
 static unsigned long lastBusActivityMs = 0;
 static bool everSawBusActivity = false;
-static const unsigned long BUS_ACTIVITY_TIMEOUT_MS = 3000;  // no valid F7 in 3s -> call it down
+static const unsigned long BUS_ACTIVITY_TIMEOUT_MS = 3000;  // no decoded frame in 3s -> call it down
 
 static void emitDisp(const statusFlagType &sf);
 static void handleSerialLine(const String &line);
@@ -331,9 +335,11 @@ void loop() {
       }
       sendLine(hex);
     }
+    // Any decoded frame proves the bus is live (see the comment on
+    // lastBusActivityMs above) -- emitDisp() still only fires for a valid F7.
+    lastBusActivityMs = millis();
+    everSawBusActivity = true;
     if (opcode == 0xF7 && f7Valid) {
-      lastBusActivityMs = millis();
-      everSawBusActivity = true;
       emitDisp(cmd->statusFlags);
     }
   }
