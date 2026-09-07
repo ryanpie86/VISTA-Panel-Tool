@@ -67,7 +67,10 @@ changes; it was already written against the generic Arduino API.
   refusing to start if this firmware's address is already active on the
   bus -- that needs the same bus-sniffing the onboarding flow will do, and
   isn't implemented yet. Only a generic "keybus not detected" fault is
-  reported (`vista.keybusConnected`).
+  reported, tracked by the sketch itself off any successfully decoded ECP
+  frame (`vista.keybusConnected` from the vendored library turned out to
+  never actually be set `true` anywhere upstream -- dead state, not a real
+  signal -- so this firmware doesn't rely on it).
 - **No panel connected yet means no real transmit.** The ECP bus is
   poll/response: a keypad only gets to transmit when the panel polls its
   address. `ACK` only fires once the library's internal transmit queue
