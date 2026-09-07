@@ -124,6 +124,16 @@ public:
     bool overflow();
     bool processSingle = false;
 
+    // RP2040/Arduino-Pico port (VISTA-Panel-Tool): hands a byte assembled
+    // elsewhere (a PIO state machine, for the primary RX pin -- see
+    // ecp_uart_rx.pio and Vista::pioRxPump()) directly into this class's
+    // existing byte-level ring buffer, the same one rxBits() otherwise
+    // fills. Reuses the identical overflow-checked insertion rxBits()
+    // itself does, so available()/read()/overflow() all keep working
+    // completely unchanged for callers -- they can't tell the byte came
+    // from PIO instead of this class's own interrupt-driven bit sampler.
+    bool pushByte(uint8_t b);
+
     int available();
     int peek();
     int read(bool processRxbits);

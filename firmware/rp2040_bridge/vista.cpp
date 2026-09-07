@@ -6,6 +6,9 @@
 #if defined(USE_RP2040)
 #include "hardware/sync.h"
 #include "hardware/gpio.h"
+#include "hardware/pio.h"
+#include "hardware/clocks.h"
+#include "ecp_uart_rx.pio.h"
 #endif
 
 Vista *pointerToVistaClass;
@@ -70,6 +73,59 @@ void IRAM_ATTR txISRTrampolineRP2040()
         pointerToVistaClass->txHandleISR();
 }
 #endif
+#endif
+
+#if defined(USE_RP2040)
+// PIO-based RX for the primary (Yellow) pin -- see ecp_uart_rx.pio and
+// the comment on Vista::pioRxPump()'s declaration in vista.h for why
+// this exists. Single global instance, matching this firmware's
+// single-Vista-object assumption elsewhere (pointerToVistaClass, the ISR
+// trampolines above).
+static PIO s_ecpPio = pio0;
+static int s_ecpSm = -1;
+
+void Vista::pioRxInit()
+{
+  // false = return -1 on failure instead of panicking. Should never
+  // realistically fail (this is the only PIO consumer in the firmware),
+  // but a silent total loss of reception would be worse than the bug
+  // this is fixing -- rxHandleISR() checks s_ecpSm and falls back to the
+  // original software bit sampler if it's still -1 here.
+  s_ecpSm = pio_claim_unused_sm(s_ecpPio, false);
+  if (s_ecpSm < 0)
+    return;
+
+  uint offset = pio_add_program(s_ecpPio, &ecp_uart_rx_program);
+
+  pio_sm_config c = ecp_uart_rx_program_get_default_config(offset);
+  sm_config_set_in_pins(&c, (uint)_rxPin);
+  sm_config_set_in_shift(&c, true /* shift right, LSB first */, true /* autopush */, 8 /* threshold */);
+  float div = (float)clock_get_hz(clk_sys) / (8.0f * 4800.0f);
+  sm_config_set_clkdiv(&c, div);
+
+  pio_gpio_init(s_ecpPio, (uint)_rxPin);
+  pio_sm_set_consecutive_pindirs(s_ecpPio, s_ecpSm, (uint)_rxPin, 1, false);
+
+  pio_sm_init(s_ecpPio, s_ecpSm, offset, &c);
+  pio_sm_set_enabled(s_ecpPio, s_ecpSm, true);
+}
+
+void Vista::pioRxPump()
+{
+  if (s_ecpSm < 0 || vistaSerial == NULL)
+    return;
+  while (!pio_sm_is_rx_fifo_empty(s_ecpPio, s_ecpSm))
+  {
+    uint8_t b = (uint8_t)(pio_sm_get(s_ecpPio, s_ecpSm) >> 24);
+    // Same gate rxHandleISR() applies before calling vistaSerial->rxRead()
+    // in the software path -- PIO free-runs regardless of bus state, so
+    // bytes framed while we're not actually in the middle of real data
+    // (poll loop, preamble, ACK slot) get drained here and discarded
+    // rather than fed to the decoder.
+    if (_rxState == sNormal || _highTime == 0)
+      vistaSerial->pushByte(b);
+  }
+}
 #endif
 
 Vista::Vista()
@@ -1240,8 +1296,20 @@ void IRAM_ATTR Vista::rxHandleISR()
 
     _highTime = 0;
   }
+#if defined(USE_RP2040)
+  // Byte assembly for this pin normally happens in PIO now (see
+  // pioRxPump(), called once per Vista::handle()) -- this software path
+  // is what bench-testing showed losing sync under bus load, which is
+  // the whole reason for the PIO port. Only fall back to it here if PIO
+  // setup actually failed (s_ecpSm still -1; see pioRxInit()), so a
+  // failed PIO claim degrades to the old behavior instead of silently
+  // losing reception entirely.
+  if (s_ecpSm < 0 && (_rxState == sNormal || _highTime == 0))
+    vistaSerial->rxRead();
+#else
   if (_rxState == sNormal || _highTime == 0)
     vistaSerial->rxRead();
+#endif
 // #ifdef ESP8266
 //   else // clear pending interrupts for this pin if any occur during transmission
 //     GPIO_REG_WRITE(GPIO_STATUS_W1TC_ADDRESS, 1 << _rxPin);
@@ -1558,6 +1626,9 @@ void Vista::pushExtBuffer()
 
 bool Vista::handle()
 {
+#if defined(USE_RP2040)
+  pioRxPump();
+#endif
   _newCmd = false;
   _newExtCmd = false;
   uint8_t x = 0;
@@ -1911,6 +1982,13 @@ void Vista::begin(int receivePin, int transmitPin, char keypadAddr, int monitorT
        gpio_set_intr_type((gpio_num_t)_rxPin, GPIO_INTR_ANYEDGE);
        gpio_isr_handler_add((gpio_num_t)_rxPin, rxISRHandler, this);
     #elif defined(USE_RP2040)
+        // Byte assembly for this pin now happens in PIO (see
+        // ecp_uart_rx.pio / pioRxPump()) rather than in vistaSerial's own
+        // interrupt-driven bit sampler -- init that here. The attachInterrupt()
+        // below is still needed independently of PIO: rxHandleISR() uses it
+        // for the bus-level preamble/ACK-slot timing state machine, which
+        // is unrelated to byte framing and untouched by this change.
+        pioRxInit();
         // no attachInterruptArg() on arduino-pico -- see rxISRTrampolineRP2040
         attachInterrupt(digitalPinToInterrupt(_rxPin), rxISRTrampolineRP2040, CHANGE);
         #else
