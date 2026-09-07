@@ -102,6 +102,23 @@ volatile uint32_t edgesDuringLastF7Read = 0;
 volatile uint32_t ackSlotBlockingTxCount = 0;
 volatile uint32_t ackSlotTxDuringLastF7Read = 0;
 
+// Counts entries into rxHandleISR()'s ackSlotBoundary path -- i.e. every
+// ACK-slot excursion's ending edge, whether or not an ACK was actually
+// transmitted for it (ackSlotBlockingTxCount above only counts the latter,
+// which is why it stayed 0 while F7 truncation kept happening). Bench
+// evidence pointed at this edge itself, not at our own TX: routed to
+// vistaSerial->rxRead() like an ordinary edge, its ~9ms+-stale timestamp
+// gets read by rxBits() as a long run of same-level "masked" bits,
+// force-completing whatever byte was mid-flight and then synthesizing
+// further all-zero bytes from the leftover elapsed time -- matching the
+// observed zero-byte runs exactly. See ECPSoftwareSerial::resyncRx()'s
+// declaration for the fix (skip rxRead() for this edge, reset bit-tracking
+// state instead). ackSlotResyncDuringLastF7Read snapshots this across an
+// F7 read the same way the other lastF7* counters do, to confirm resyncRx()
+// fires on reads that previously stalled and that they now complete.
+volatile uint32_t ackSlotResyncCount = 0;
+volatile uint32_t ackSlotResyncDuringLastF7Read = 0;
+
 // arduino-pico's attachInterrupt() has no arg-passing variant (unlike
 // ESP8266/ESP32's attachInterruptArg). Since this firmware only ever runs
 // one Vista instance, route through the same file-scope instance pointer
@@ -1374,6 +1391,11 @@ void IRAM_ATTR Vista::rxHandleISR()
   static byte b;
   static uint8_t ackAddr;
   static uint8_t ackCount=0;
+  // Set inside the _lowTime>9000 branch below (an ACK-slot excursion, on
+  // its ending/rising edge) regardless of whether an ACK is actually
+  // transmitted for it -- see the resyncRx() call site further down for
+  // why this edge needs different handling from an ordinary one.
+  bool ackSlotBoundary = false;
     #if defined(USE_ESP_IDF) or defined(ESP32)
   bool level=gpio_get_level((gpio_num_t) _rxPin);
   #elif defined(USE_RP2040)
@@ -1395,6 +1417,7 @@ void IRAM_ATTR Vista::rxHandleISR()
     if (_lowTime > 9000)
     {
       _markPulse = 2;
+      ackSlotBoundary = true;
 
       // Bench evidence: F7 long reads occasionally capture a few real
       // payload bytes (proving PIO itself resyncs fine after a clean
@@ -1589,10 +1612,17 @@ void IRAM_ATTR Vista::rxHandleISR()
   // setup actually failed (s_ecpSm still -1; see pioRxInit()), so a
   // failed PIO claim degrades to the old behavior instead of silently
   // losing reception entirely.
-  if (s_ecpSm < 0 && (_rxState == sNormal || _highTime == 0))
+  if (ackSlotBoundary)
+  {
+    ackSlotResyncCount++;
+    vistaSerial->resyncRx();
+  }
+  else if (s_ecpSm < 0 && (_rxState == sNormal || _highTime == 0))
     vistaSerial->rxRead();
 #else
-  if (_rxState == sNormal || _highTime == 0)
+  if (ackSlotBoundary)
+    vistaSerial->resyncRx();
+  else if (_rxState == sNormal || _highTime == 0)
     vistaSerial->rxRead();
 #endif
 // #ifdef ESP8266
@@ -2056,11 +2086,17 @@ bool Vista::handle()
       // is nonzero on reads that capture few/no payload bytes, this window is
       // the culprit.
       uint32_t ackSlotTxBeforeF7Read = ackSlotBlockingTxCount;
+      // See ackSlotResyncCount's declaration: this is the fix for the
+      // ACK-slot boundary edge itself, independent of whether we transmit.
+      // Nonzero here on a read that now completes (vs. previously stalling)
+      // is the confirmation this was the real cause.
+      uint32_t ackSlotResyncBeforeF7Read = ackSlotResyncCount;
       readChars(F7_MESSAGE_LENGTH - 1, _cbuf, &gidx);
       pumpedDuringLastF7Read = pioPumpedTotal - pumpedBeforeF7Read;
       deactivatedDuringLastF7Read = pioDeactivateCount - deactivatesBeforeF7Read;
       edgesDuringLastF7Read = rxEdgeCountRP2040 - edgesBeforeF7Read;
       ackSlotTxDuringLastF7Read = ackSlotBlockingTxCount - ackSlotTxBeforeF7Read;
+      ackSlotResyncDuringLastF7Read = ackSlotResyncCount - ackSlotResyncBeforeF7Read;
 #else
       readChars(F7_MESSAGE_LENGTH - 1, _cbuf, &gidx);
 #endif

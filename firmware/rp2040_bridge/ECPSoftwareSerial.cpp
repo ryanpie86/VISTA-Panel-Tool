@@ -653,6 +653,18 @@ void SoftwareSerial::rxBits()
     }
 }
 
+void IRAM_ATTR SoftwareSerial::resyncRx()
+{
+    // Same idle bit-position enableRx(true) primes a fresh read with --
+    // rxBits()'s "stop bit can go undetected" check (m_rxCurBit <
+    // m_dataBits + 2) requires strictly less than this to fire, so parking
+    // here also prevents that synthetic-completion logic from misfiring
+    // against the timestamp reset below.
+    m_rxCurBit = m_dataBits + 2;
+    m_rxCurByte = 0;
+    m_isrLastCycle.store(ticks());
+}
+
 bool SoftwareSerial::pushByte(uint8_t b)
 {
     // Same overflow-checked insertion rxBits() does at the end of its
