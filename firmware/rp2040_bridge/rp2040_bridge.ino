@@ -83,6 +83,16 @@ static unsigned long lastKeySentMs = 0;
 static bool lastKeybusConnected = false;
 static unsigned long lastBusFaultReportMs = 0;
 
+// vista.keybusConnected (upstream) is never actually set true anywhere in
+// the library -- only ever assigned false, in Vista::stop(). Confirmed by
+// grepping both the original esphome-components source and our vendored
+// copy. Track real bus activity ourselves instead: any decoded frame at
+// all (not just valid 0xF7 display frames) proves the bus is alive, since
+// routine polling traffic (0xF0) is constant on a live ECP bus.
+static unsigned long lastBusActivityMs = 0;
+static bool everSawBusActivity = false;
+static const unsigned long BUS_ACTIVITY_TIMEOUT_MS = 3000;  // no frame in 3s -> call it down
+
 static void emitDisp(const statusFlagType &sf);
 static void handleSerialLine(const String &line);
 
@@ -148,6 +158,8 @@ void loop() {
     cmdQueueItem *cmd = vista.getNextCmd();
     if (cmd == NULL)
       break;
+    lastBusActivityMs = millis();
+    everSawBusActivity = true;
     // getNextCmd() surfaces every decoded ECP frame type (routine bus
     // polls, key-acks, expander/LRR/RF/AUI traffic, ...), not just alpha
     // display updates -- they all funnel through the same
@@ -174,7 +186,7 @@ void loop() {
     }
   }
 
-  bool connected = vista.keybusConnected;
+  bool connected = everSawBusActivity && (millis() - lastBusActivityMs < BUS_ACTIVITY_TIMEOUT_MS);
   if (connected != lastKeybusConnected) {
     setStatusColor(connected ? 0 : 32, connected ? 32 : 0, 0);
     lastKeybusConnected = connected;
