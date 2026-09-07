@@ -247,7 +247,8 @@ void loop() {
                     " forwarded=" + String(pioForwardedTotal) +
                     " lastF7Pumped=" + String(pumpedDuringLastF7Read) +
                     " deactivates=" + String(pioDeactivateCount) +
-                    " lastF7Deactivates=" + String(deactivatedDuringLastF7Read));
+                    " lastF7Deactivates=" + String(deactivatedDuringLastF7Read) +
+                    " lastF7Edges=" + String(edgesDuringLastF7Read));
 #endif
     lastHeartbeatMs = millis();
   }
