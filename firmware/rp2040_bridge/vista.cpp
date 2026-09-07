@@ -158,6 +158,29 @@ void Vista::pioRxPump()
 {
   if (s_ecpSm < 0 || vistaSerial == NULL)
     return;
+  // Called from both the main thread (readChars()'s poll loop) and, as
+  // of the ACK-TX fix above, from inside rxHandleISR() itself -- a real
+  // hardware interrupt that can preempt the main thread at any point,
+  // including mid-call here. vistaSerial->pushByte() mutates a shared
+  // ring buffer (m_inPos/m_buffer) with no synchronization of its own,
+  // so without this critical section a main-thread call interrupted
+  // mid-update by an ISR-context call racing on the same index would
+  // silently corrupt or drop whichever byte loses -- bench-confirmed as
+  // the cause of F7 (and others) vanishing entirely rather than merely
+  // truncating.
+  //
+  // Deliberately NOT Vista::disableInterrupts()/restoreInterrupts() --
+  // those save state into the single shared static m_savedPS, which is
+  // NOT nesting-safe. rxHandleISR() already holds its own
+  // disableInterrupts() region using that same slot for its whole
+  // duration; calling it again here from within that context would
+  // clobber m_savedPS, and rxHandleISR()'s own restoreInterrupts() at
+  // the end would then restore the wrong (inner) value instead of the
+  // true pre-ISR state -- risking interrupts left permanently disabled.
+  // A local variable makes this correctly reentrant: nesting inside an
+  // already-disabled region just re-disables (a no-op) and restores
+  // right back to "disabled", exactly as it should.
+  uint32_t savedIrq = save_and_disable_interrupts();
   while (!pio_sm_is_rx_fifo_empty(s_ecpPio, s_ecpSm))
   {
     uint8_t b = (uint8_t)(pio_sm_get(s_ecpPio, s_ecpSm) >> 24);
@@ -168,6 +191,7 @@ void Vista::pioRxPump()
     if (_rxState == sNormal || _highTime == 0)
       vistaSerial->pushByte(b);
   }
+  restore_interrupts(savedIrq);
 }
 #endif
 
