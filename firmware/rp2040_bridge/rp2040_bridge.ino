@@ -72,7 +72,12 @@ static const unsigned long BUS_FAULT_REPORT_MS = 5000;  // rate-limit repeated "
 Vista vista;
 
 #if defined(ARDUINO_ARCH_RP2040)
-static Adafruit_NeoPixel statusPixel(1, PIN_STATUS_LED, NEO_GRB + NEO_KHZ800);
+// Bench report: red/green consistently came out swapped from what
+// setStatusColor()'s logic calls for (green when disconnected, red when
+// connected) -- classic symptom of the actual LED's wire order not
+// matching the color-order flag declared here. NEO_RGB instead of
+// NEO_GRB fixes it for this board.
+static Adafruit_NeoPixel statusPixel(1, PIN_STATUS_LED, NEO_RGB + NEO_KHZ800);
 #endif
 
 static bool keyPending = false;
@@ -178,6 +183,22 @@ void loop() {
                     " F9=" + String(cntF9) + " FA=" + String(cntFA) +
                     " F2=" + String(cntF2) + " F8=" + String(cntF8) +
                     " FB=" + String(cntFB) + " other=" + String(cntOther));
+#if defined(ARDUINO_ARCH_RP2040)
+    // readChars()'s own poll loop, isolated to long (44-byte, F7-only)
+    // reads. longReadAttempts should roughly track F7seen. avgPolls very
+    // low relative to the ~20ms/4us ~= 5000 polls a full timeout should
+    // produce means something is starving the poll loop of CPU time
+    // (an interference problem); avgPolls near that ceiling with bytes
+    // still short means the loop is running at full speed but genuinely
+    // isn't getting new data (points back at the ISR/edge-loss theory).
+    uint32_t lra = longReadAttempts;
+    Serial.println("LONGREAD attempts=" + String(lra) +
+                    " polls=" + String(longReadPolls) +
+                    " bytes=" + String(longReadBytes) +
+                    " timeouts=" + String(longReadTimeouts) +
+                    " avgPolls=" + String(lra ? longReadPolls / lra : 0) +
+                    " avgUs=" + String(lra ? longReadElapsedUs / lra : 0));
+#endif
     lastHeartbeatMs = millis();
   }
 
