@@ -235,8 +235,15 @@ void loop() {
     // hardware sampler itself stops producing payload bytes during
     // that window -- a different class of bug than anything fixed here
     // so far, upstream of every gate and the ring-buffer race alike.
+    // nearF7 counts bytes exactly one bit away from 0xF7 -- a session
+    // with confirmed real screen changes (real F7 broadcasts) but
+    // rawF7=0 the whole time raises the question of whether PIO's
+    // sample point is landing 0xF7 as a single-bit-flipped neighbor
+    // instead of the true value. High relative to rawF7 supports that;
+    // near 0 rules it out and points elsewhere instead.
     Serial.println("RAWPIO pumped=" + String(pioPumpedTotal) +
                     " rawF7=" + String(rawF7ByteSeen) +
+                    " nearF7=" + String(nearF7ByteSeen) +
                     " forwarded=" + String(pioForwardedTotal) +
                     " lastF7Pumped=" + String(pumpedDuringLastF7Read));
 #endif
