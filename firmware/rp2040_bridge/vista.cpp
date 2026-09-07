@@ -417,27 +417,24 @@ void Vista::readChars(int ct, char buf[], int *idx)
   if (longRead) {
     longReadAttempts++;
     startUs = micros();
-    // Bench evidence: F7 long reads (44 bytes after the opcode) have a
-    // 100% failure rate across every attempt this whole investigation,
-    // even on attempts where PIO is confirmed still correctly enabled
-    // and sampling, with real bus edges nearby, right up to and including
-    // the point this read gives up. Every lower-level cause found so far
-    // (forwarding-gate gap, ring-buffer race, ISR-blocking FIFO
-    // starvation, PIO's bit-phase desyncing across an ACK-slot excursion)
-    // has been fixed without changing this outcome. One untested
-    // possibility: this bus's F7 broadcast (docs: ~100ms for the full
-    // 44 bytes, i.e. ~2.3ms/byte on average) may have a longer one-time
-    // processing gap between the opcode announcement and the actual
-    // start of payload streaming than the 20ms inter-byte timeout below
-    // allows for, even if consecutive payload bytes themselves arrive
-    // well within it once streaming starts. `timeout` only resets when a
-    // byte is actually read, so widening this for long reads only costs
-    // extra blocking in the exact all-idle failure case already being
-    // hit (a one-time wait, not per-byte -- the loop exits entirely once
-    // this elapses with nothing read at all); a successful read is
+    // Bench evidence: with the PIO gating and _rxState-recovery bugs
+    // fixed (see rxHandleISR()'s _lowTime>9000 branch), F7 long reads now
+    // capture real payload for the first time -- but still stop short of
+    // the full 44 bytes, giving up on the 100ms gap timeout below with
+    // ZERO ACK-slot excursions recorded during the read (pioDeactivateCount
+    // unchanged across the window) and an edge count consistent with just
+    // the bytes actually decoded, not with further real bus activity
+    // going undecoded. Both point the same way: real bytes stop arriving
+    // partway through, for longer than 100ms, for a reason unrelated to
+    // any excursion this file already tracks. Widening this further is a
+    // direct experiment to find out how long that real gap actually is --
+    // `timeout` only resets when a byte is actually read, so this only
+    // costs extra blocking in the exact all-idle failure case already
+    // being hit (a one-time wait, not per-byte -- the loop exits entirely
+    // once this elapses with nothing read at all); a successful read is
     // unaffected either way since it keeps resetting the clock. Ordinary
     // short reads elsewhere in this class keep the original 20ms.
-    readTimeoutMs = 100;
+    readTimeoutMs = 500;
   }
 #endif
   while (x < ct && millis() - timeout < readTimeoutMs)
