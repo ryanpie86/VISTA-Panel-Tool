@@ -420,21 +420,28 @@ void Vista::readChars(int ct, char buf[], int *idx)
     // Bench evidence: with the PIO gating and _rxState-recovery bugs
     // fixed (see rxHandleISR()'s _lowTime>9000 branch), F7 long reads now
     // capture real payload for the first time -- but still stop short of
-    // the full 44 bytes, giving up on the 100ms gap timeout below with
-    // ZERO ACK-slot excursions recorded during the read (pioDeactivateCount
+    // the full 44 bytes, giving up on the gap timeout below with ZERO
+    // ACK-slot excursions recorded during the read (pioDeactivateCount
     // unchanged across the window) and an edge count consistent with just
     // the bytes actually decoded, not with further real bus activity
     // going undecoded. Both point the same way: real bytes stop arriving
-    // partway through, for longer than 100ms, for a reason unrelated to
-    // any excursion this file already tracks. Widening this further is a
-    // direct experiment to find out how long that real gap actually is --
-    // `timeout` only resets when a byte is actually read, so this only
-    // costs extra blocking in the exact all-idle failure case already
-    // being hit (a one-time wait, not per-byte -- the loop exits entirely
-    // once this elapses with nothing read at all); a successful read is
-    // unaffected either way since it keeps resetting the clock. Ordinary
-    // short reads elsewhere in this class keep the original 20ms.
-    readTimeoutMs = 500;
+    // partway through, for longer than the old 100ms, for a reason
+    // unrelated to any excursion this file already tracks.
+    //
+    // Widening this is a direct experiment to find out how long that real
+    // gap actually is -- but scoped to genuine F7 reads specifically
+    // (ct is exactly F7_MESSAGE_LENGTH-1 only for that one call site).
+    // F2/F8/FA frames also land here via a corrupted/oversized length
+    // byte read from the packet itself (an already-known false trigger,
+    // unrelated to F7) -- and since `timeout` only resets when a byte is
+    // actually read, a slow trickle of real bytes on one of THOSE calls
+    // chains many sub-timeout gaps into far longer total blocking than
+    // the timeout value itself suggests. Confirmed on the bench: with a
+    // blanket 500ms applied to every ct>=20 call, an F2-triggered false
+    // long read (f7Branch stayed 0 all session) averaged over 2 seconds
+    // of real main-loop blocking per attempt. Keep those at the old
+    // 100ms -- ordinary short reads elsewhere in this class keep 20ms.
+    readTimeoutMs = (ct == F7_MESSAGE_LENGTH - 1) ? 500 : 100;
   }
 #endif
   while (x < ct && millis() - timeout < readTimeoutMs)
