@@ -84,6 +84,10 @@ volatile uint32_t pumpedDuringLastF7Read = 0;
 volatile uint32_t pioDeactivateCount = 0;
 volatile uint32_t deactivatedDuringLastF7Read = 0;
 
+// See the comment at its use site (the F7 branch's edgesBeforeF7Read
+// snapshot) for what this answers.
+volatile uint32_t edgesDuringLastF7Read = 0;
+
 // arduino-pico's attachInterrupt() has no arg-passing variant (unlike
 // ESP8266/ESP32's attachInterruptArg). Since this firmware only ever runs
 // one Vista instance, route through the same file-scope instance pointer
@@ -1986,9 +1990,23 @@ bool Vista::handle()
       // different class of bug than anything fixed in this file so far.
       uint32_t pumpedBeforeF7Read = pioPumpedTotal;
       uint32_t deactivatesBeforeF7Read = pioDeactivateCount;
+      // rxEdgeCountRP2040 increments in rxISRTrampolineRP2040() on every
+      // real hardware edge-triggered interrupt on GP26 -- ground truth for
+      // whether the physical line toggled at all, entirely independent of
+      // PIO's internal state (its SM, FIFO, and enable bit are invisible
+      // to this counter). deactivatedDuringLastF7Read=0 already proved the
+      // _f7LongReadActive override has no gap, yet lastF7Pumped stayed 0 --
+      // so this answers the next question directly: did GP26 see ANY edge
+      // during that window (pointing at a PIO-internal bug: the bit-phase
+      // misalignment/FIFO-stall class of hypothesis) or none at all
+      // (meaning the line itself was quiet -- not a software bug in this
+      // file, but a real absence of transitions on the wire during that
+      // specific window).
+      uint32_t edgesBeforeF7Read = rxEdgeCountRP2040;
       readChars(F7_MESSAGE_LENGTH - 1, _cbuf, &gidx);
       pumpedDuringLastF7Read = pioPumpedTotal - pumpedBeforeF7Read;
       deactivatedDuringLastF7Read = pioDeactivateCount - deactivatesBeforeF7Read;
+      edgesDuringLastF7Read = rxEdgeCountRP2040 - edgesBeforeF7Read;
       _f7LongReadActive = false;
 #else
       readChars(F7_MESSAGE_LENGTH - 1, _cbuf, &gidx);
