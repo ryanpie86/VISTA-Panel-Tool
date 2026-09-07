@@ -52,7 +52,7 @@ planned as the first real build/test milestone.
 | Charge + power management | **USB-C charging circuit, with pass-through/overnight-charge support, on an ISOLATED DC-DC/charge path** | **Decided (revised).** The device runs off battery in the field and stays on USB-C power (charging while running) for unattended overnight logging sessions — not powered from the panel's own AUX terminals. Needs a charge IC/board that supports simultaneous charge+discharge (TP4056-style boards do NOT reliably support this — look at USB-C PD trigger + a proper charge/power-path IC, or a PowerBoost-style board that explicitly supports it) AND provides galvanic isolation between the external USB-C input and the internal battery/Pi/RP2040 rails (e.g. an isolated DC-DC converter module on the charge path). This is where the ground-loop protection now lives — see "Isolation strategy" below. |
 | Bus interface (RP2040 <-> panel) | **Non-isolated** (resistor-divider + opto/transistor, per esphome-vistaECP's "simple version" schematic — their recommended default) | **Decided (revised from ground-isolated).** Shares ground directly with the panel, same as a real physical keypad's wiring (4-wire, no isolation, always has been how keypads connect). Chosen for full signal fidelity with zero compromise — esphome-vistaECP's own README calls this the best-signal, most-recommended option and calls the ground-isolated variant "least recommended" for signal quality. See "Isolation strategy" below for why this is safe given where isolation now lives instead. |
 | Storage | **Industrial/endurance-rated microSD** | **Decided** — user has a good track record with these for continuous read/write workloads, covers the datalogging use case without needing an NVMe HAT. |
-| Panel connection | 4-conductor cable + small screw terminal or keypad-style connector | Matches how a real alpha keypad taps the bus (red/black: +12V, GND; yellow: keypad→panel data; green: panel→keypad data — confirmed on the bench, see "Still open" item 1). |
+| Panel connection | 4-conductor cable + small screw terminal or keypad-style connector | Matches how a real alpha keypad taps the bus (red/black: +12V, GND; yellow: panel→keypad data; green: keypad→panel data — confirmed via the Vista-20P's own technician manual and reconciled bench data, see "Still open" item 1). |
 | Networking | Pi's built-in WiFi only, AP-mode-first with STA fallback | **Decided (revised — wired Ethernet and the physical display both dropped; device is headless/WiFi-only).** See `CONCEPT.md` "Networking" for the AP/STA flow. No new hardware needed beyond the Pi's onboard radio; config must stay 2.4GHz-only for Zero 2 W compatibility (see "Compute board" below). |
 | Enclosure | **User-designed, 3D-printed** | Out of scope for this doc — sized around the battery/board stack now that there's no display to accommodate. Kiosk/kickstand framing no longer applies since there's nothing to view locally; exact form factor still the user's call. |
 
@@ -116,9 +116,9 @@ ADC-capable pins (GP26-29) are broken out on this board, resolving the
 
 | Signal | Pin | Notes |
 |---|---|---|
-| Green (panel TX → RP2040 RX, through the 33K/10K divider) | **GP26** (ADC0) | Digital input mode. **Corrected on the bench** — see "Still open" item 1: Yellow and Green were swapped in earlier drafts of this doc, inherited from a misreading of community docs rather than direct verification |
-| Yellow (RP2040 TX → panel, drives the NPN base) | **GP27** (ADC1) | Digital output — resolves the old GPIO_26 dual-assignment conflict. Base transistor: 2N2222, 1kΩ base resistor (see "Still open" item 1 for the sizing) |
-| Yellow bus-monitor tap (separate divider, per esphome-vistaECP's `MONITORTX` feature) | **GP28** (ADC2) | Digital input — passively decodes *other* devices' traffic on Yellow (other keypads, zone expanders, RF receiver modules) that the RP2040 wouldn't otherwise see; not collision detection on the RP2040's own TX. Feeds the future "Wireless (RF) zone visibility" / datalogger-role work in `CONCEPT.md`, not required for near-term ECP read/write |
+| Yellow (panel TX → RP2040 RX, through the 33K/10K divider) | **GP26** (ADC0) | Digital input mode. **Confirmed via the Vista-20P technician manual** — see "Still open" item 1: this doc briefly had Yellow/Green swapped based on a bench observation that turned out to be a correlation error, corrected back once the manual settled it |
+| Green (RP2040 TX → panel, drives the NPN base) | **GP27** (ADC1) | Digital output — resolves the old GPIO_26 dual-assignment conflict. Base transistor: 2N2222, 1kΩ base resistor (see "Still open" item 1 for the sizing) |
+| Green bus-monitor tap (separate divider, per esphome-vistaECP's `MONITORTX` feature) | **GP28** (ADC2) | Digital input — passively decodes *other* devices' traffic on Green (other keypads, zone expanders, RF receiver modules) that the RP2040 wouldn't otherwise see; not collision detection on the RP2040's own TX. Feeds the future "Wireless (RF) zone visibility" / datalogger-role work in `CONCEPT.md`, not required for near-term ECP read/write |
 | Status LED (WS2812) | **GP16**, internal | Hardwired on-board, not a header pin — nothing to wire |
 
 GP0/GP1 (originally earmarked for UART0) are unused now that the Pi
@@ -311,7 +311,7 @@ Vista panel keypad bus (4-wire ECP)
    headless, interacted with exclusively via browser. See BOM above and
    `CONCEPT.md` "Networking".
 9. ~~RP2040-Zero pin mapping~~ — finalized against the board's actual
-   pinout diagram: Green=GP26, Yellow=GP27, Yellow bus-monitor tap=GP28,
+   pinout diagram: Yellow=GP26, Green=GP27, Green bus-monitor tap=GP28,
    WS2812 status LED fixed internally on GP16 (GP0/GP1, originally
    earmarked for UART0, are unused now that the Pi interconnect reverted
    to USB-serial — see item 7 above). Resolves the old GPIO_26
@@ -323,8 +323,8 @@ Vista panel keypad bus (4-wire ECP)
    receiver modules) via their `MONITORTX` feature — kept for that reason
    (feeds the future RF/zone-expander visibility work), not for
    self-collision detection. See "Bus coprocessor: RP2040-Zero" above for
-   the full pin table. (Yellow/Green assignment corrected since — see
-   "Still open" item 1.)
+   the full pin table. (Yellow/Green wire-role assignment went through a
+   wrong turn and back — see "Still open" item 1 for the full story.)
 
 ## Still open
 
@@ -347,86 +347,66 @@ Vista panel keypad bus (4-wire ECP)
      with a couple more captures, but a good sign for firmware margin.
    - Divider math confirmed against real levels: 13.0V × (3.3k/13.3k) ≈
      3.2V, matching the interface circuit's own design target at the time.
-   - **One follow-up before finalizing R1/R2 values:** the Green
-     (TX-from-panel) line — the one actually feeding the RP2040 GPIO — still
-     needs a clean full-scale capture; the only capture taken so far was
-     misconfigured at 100mV/div on a 13V line and came out clipped.
    - **Divider ratio revised to match esphome-vistaECP's own published
      values**, resolving the worst-case-AUX margin concern this doc
      previously flagged: at 13.8-14V AUX, the original ~10K/3.3K ratio
      (≈25%) put the GPIO at ~3.4-3.5V — thin against the RP2040's 3.6V
      absolute max. Their recommended non-isolated "simple version"
      schematic uses **33K (series) / 10K (to GND)** on their RX/divider
-     line (≈23% ratio) — close in class, but their field-proven number,
-     landing at ~3.0-3.1V across the normal 13.0-13.2V range and only
-     ~3.2-3.3V at worst-case AUX. **Adopt 33K/10K for R1/R2** rather than
-     the earlier "tighten to ~2.2K" guess or a clamp diode — neither is
-     needed once the ratio itself matches theirs. (Their schematic also
-     confirms their default circuit's TX line is driven through a 4N35
-     optocoupler + 180Ω resistor, not a transistor — the transistor
-     variant this project uses is their separately-mentioned
-     optocoupler-free alternative, for which they don't publish exact
-     component values. Note: their own wire-color labeling for which
-     physical wire is "yellow" vs. "green" turned out not to carry over to
-     this project's own wiring — see the correction below — so this
-     paragraph deliberately doesn't name their lines by color, only by
-     role.)
-   - **Q1 and R_B confirmed:** 2N2222 for Q1 (user has stock on hand), 1kΩ
-     for R_B. Comfortably within spec for this role — 2N2222's Vceo
-     (30V+) is more than 2x the ~14V worst-case AUX voltage Q1 ever sees
-     across collector-emitter when off, its 600mA rating is far beyond
-     anything this bus's pull-up will ever ask it to sink, and its
-     switching speed (hundreds of MHz) isn't remotely a factor against
-     ~3ms bit cells. 1kΩ on the base (driven from GP27's 3.3V logic)
-     gives ~2.6mA of base current — comfortably saturating the transistor
-     at 2N2222's typical hFE well past any current this bus will draw,
-     without stressing the RP2040 GPIO's safe sourcing limit.
-   - **Yellow/Green wire roles corrected on the bench.** Earlier drafts of
-     this doc had Yellow feeding the divider/GPIO input and Green driving
-     the transistor, following esphome-vistaECP's own README (which
-     describes its PulseView decoder setup as "one for the panel (yellow
-     line) and one for the keypad (green line)"). Direct bench testing on
-     this project's own wiring contradicted that: pressing keys on the
-     attached keypad produced a waveform on **Yellow** every time, which
-     idles at a confirmed **13.8V** (scope and DMM agree) — i.e. Yellow is
-     the keypad→panel (TX) line here, not panel→keypad. Green was the
-     quiet one, consistent with it being the panel's line (the panel
-     doesn't respond to every single keystroke, so Green only shows
-     activity when the panel actually has something to say — triggering
-     the panel's Keypad Lockout feature, which does respond on every
-     keypress once armed, was what finally produced a reliable, capturable
-     signal on Green). This matches the very first bullet in this section
-     ("...on the Green (RX) line"), which had it right from the start —
-     the error was introduced later in this doc, not in that original
-     measurement. Whatever esphome-vistaECP's own internal color
-     convention is, it evidently doesn't transfer directly to this
-     project's wiring, so **this doc now treats its own bench verification
-     as authoritative over the source project's wire-color labels.** Pin
-     table above updated: Green=GP26 (divider), Yellow=GP27 (transistor),
-     Yellow=GP28 (bus-monitor tap, since Yellow is the shared line other
-     keypads/RF modules would also transmit on).
-   - **Divider-margin question resolved.** Dual-channel capture (CH1=Green
-     at a sensitive 50mV/div, CH2=Yellow at 5V/div, same timebase) plus a
-     Fluke DMM cross-check settled what Green actually does: quiet during
-     ordinary keypad activity (small, sub-volt blips — DMM caught it
-     momentarily hitting ~780mV, consistent with the scope's small-spike
-     reading, not a robust signal of its own), but producing a real,
-     larger transmission when the panel actually has something to say —
-     two separate Keypad-Lockout-triggered captures peaked at 8.4V and
-     9.6V respectively. The higher of those (**9.6V**) is the right
-     worst-case number for divider sizing, not the quiet baseline: 9.6V ×
-     (10k/43k) ≈ **2.23V** at GP26 — comfortably under the RP2040's 3.6V
-     absolute max, with substantially more margin than the ~3.2-3.3V
-     estimated earlier from the assumed 13.8-14V worst-case-AUX figure.
-     Green's real panel-driven-high level runs well below the raw AUX
-     rail it was originally assumed to swing to, which is why the margin
-     turned out this much more comfortable. No clamp diode, no ratio
-     change — 33K/10K stands, confirmed with real bench data on both
-     lines now.
+     line (≈23% ratio) — close in class, but their field-proven number.
+     **Adopt 33K/10K for R1/R2** rather than the earlier "tighten to
+     ~2.2K" guess or a clamp diode — neither is needed once the ratio
+     itself matches theirs. (Their schematic also confirms their default
+     circuit's TX line is driven through a 4N35 optocoupler + 180Ω
+     resistor, not a transistor — the transistor variant this project
+     uses is their separately-mentioned optocoupler-free alternative, for
+     which they don't publish exact component values.)
+   - **Yellow/Green wire roles: settled, after a wrong turn.** This doc
+     originally had Yellow feeding the divider/GPIO input (panel→device)
+     and Green driving the transistor (device→panel), matching
+     esphome-vistaECP's README. A bench observation appeared to contradict
+     that — pressing keys on the attached keypad produced a waveform on
+     Yellow every single time, which read as "Yellow must be the keypad's
+     own TX line" — so this doc flipped the assignment. **That flip was
+     wrong.** The Vista-20P's own technician manual settles why: it lists
+     **Yellow as "data out"** (the panel's output) and **Green as "data in
+     from keypad."** Yellow showed activity on every keypress not because
+     the keypad drives it, but because the panel is *constantly* using
+     Yellow to push alpha-display text and zone-status updates,
+     independent of any particular keystroke — something was always
+     happening on it, keypress or not. Green, by contrast, only stirs when
+     a key is actually pressed, exactly matching "data in from keypad."
+     **Final, manual-confirmed assignment: Yellow = panel→device (feeds
+     the divider), Green = device→panel (drives the transistor)** — back
+     to the original assumption, and also matching the very first bullet
+     in this section ("...on the Green (RX) line"), which had it right
+     from the start. Pin table above reflects this: Yellow=GP26 (divider),
+     Green=GP27 (transistor), Green=GP28 (bus-monitor tap, since Green is
+     the shared line other keypads/RF modules would also transmit
+     keystrokes on).
+   - **Divider margin, using the correct line:** Yellow (the divider's
+     actual input) is confirmed idle-high **13.8V** via both scope and a
+     Fluke DMM — repeatedly, cleanly, no clipping. Through the 33K/10K
+     divider: 13.8V × (10k/43k) ≈ **3.21V** at GP26, comfortably under the
+     RP2040's 3.6V absolute max (~11% headroom). No clamp diode needed.
+   - **Q1 and R_B confirmed, using the correct line:** 2N2222 for Q1 (user
+     has stock on hand), 1kΩ for R_B. Green (the transistor's actual line)
+     is quiet during ordinary keypad activity (sub-volt blips — a Fluke
+     DMM caught it momentarily hitting ~780mV) but produces a real, larger
+     transmission when a key is actually pressed — two captures peaked at
+     8.4V and 9.6V. 2N2222's 30V+ Vceo clears that 9.6V peak with
+     enormous margin, its 600mA rating is far beyond anything this bus's
+     pull-up will ever ask it to sink, and its switching speed (hundreds
+     of MHz) isn't remotely a factor against ~3ms bit cells. 1kΩ on the
+     base (driven from GP27's 3.3V logic) gives ~2.6mA of base current —
+     comfortably saturating the transistor at 2N2222's typical hFE well
+     past any current this bus will draw, without stressing the RP2040
+     GPIO's safe sourcing limit.
    - **Before soldering headers and going physically live:** one step
-     left — a re-check with the 2N2222/1kΩ interface actually wired in,
-     rather than assembling straight from the paper design. The clean
-     full-scale captures on both lines are done.
+     left — a re-check with the 2N2222/1kΩ interface actually wired onto
+     the correct lines, rather than assembling straight from the paper
+     design. The clean full-scale captures on both lines, now correctly
+     attributed, are done.
 2. **Battery capacity** — deliberately left undecided, and not needed
    during the development/testing phase — the build will run on isolated
    wall power (via the isolated USB-C/DC-DC charge path already in the
