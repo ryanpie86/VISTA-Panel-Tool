@@ -74,7 +74,7 @@ volatile uint32_t f7BranchEntries = 0;
 volatile uint32_t rawF7ByteSeen = 0;
 volatile uint32_t pioPumpedTotal = 0;
 volatile uint32_t pioForwardedTotal = 0;
-volatile uint32_t f7FollowupBurst = 0;
+volatile uint32_t pumpedDuringLastF7Read = 0;
 
 // arduino-pico's attachInterrupt() has no arg-passing variant (unlike
 // ESP8266/ESP32's attachInterruptArg). Since this firmware only ever runs
@@ -201,26 +201,12 @@ void Vista::pioRxPump()
   // already-disabled region just re-disables (a no-op) and restores
   // right back to "disabled", exactly as it should.
   uint32_t savedIrq = save_and_disable_interrupts();
-  bool sawF7ThisCall = false;
   while (!pio_sm_is_rx_fifo_empty(s_ecpPio, s_ecpSm))
   {
     uint8_t b = (uint8_t)(pio_sm_get(s_ecpPio, s_ecpSm) >> 24);
     pioPumpedTotal++;
-    // f7FollowupBurst: within this SAME drain pass (one call to this
-    // function -- i.e. PIO's FIFO already had a backlog at the moment
-    // we saw a 0xF7 opcode, not spread across separate later calls),
-    // count every further byte drained after that opcode. Answers,
-    // directly on PIO's raw output with no gating involved: does PIO
-    // keep sampling past the opcode at all, or does its FIFO go empty
-    // (nothing more to drain) immediately after -- meaning PIO itself
-    // stopped producing bytes right there, upstream of every gate.
-    if (sawF7ThisCall)
-      f7FollowupBurst++;
     if (b == 0xF7)
-    {
       rawF7ByteSeen++;
-      sawF7ThisCall = true;
-    }
     // Belt-and-suspenders: PIO is now only enabled during sNormal (see
     // pioRxSetActive()), but this mirrors the same gate rxHandleISR()
     // used before calling vistaSerial->rxRead() in the software path, in
@@ -1950,7 +1936,20 @@ bool Vista::handle()
       // rxHandleISR() this specific long read is in flight so it won't
       // false-bail sNormal (and disable PIO with it) on a timing hiccup.
       _f7LongReadActive = true;
+      // Bench diagnostic: f7FollowupBurst (same-drain-pass backlog) turned
+      // out to be a bad test -- readChars() polls every ~4-6us against a
+      // ~2.5ms/byte transmission rate, so consecutive real bytes almost
+      // never land in the same FIFO drain pass even when everything is
+      // working; it stays 0 either way and proves nothing. This measures
+      // the same question properly: total bytes PIO produces (pumped,
+      // regardless of value) across the ENTIRE ~20ms window of this one
+      // F7 read attempt. If it's ~0 while forwarded==pumped elsewhere
+      // (ruling out every software gate), PIO's hardware sampler itself
+      // is not producing payload bytes during this window at all -- a
+      // different class of bug than anything fixed in this file so far.
+      uint32_t pumpedBeforeF7Read = pioPumpedTotal;
       readChars(F7_MESSAGE_LENGTH - 1, _cbuf, &gidx);
+      pumpedDuringLastF7Read = pioPumpedTotal - pumpedBeforeF7Read;
       _f7LongReadActive = false;
 #else
       readChars(F7_MESSAGE_LENGTH - 1, _cbuf, &gidx);
