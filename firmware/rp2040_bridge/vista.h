@@ -277,6 +277,25 @@ private:
     // problem.
     void pioRxInit();
     void pioRxPump();
+    // Bench evidence (live-traffic capture, F7 reads consistently stalling
+    // ~12-13 bytes into the 45-byte frame, 100% of long-read attempts
+    // timing out): rxHandleISR()'s own sNormal->sPolling bailout
+    // (_highTime > 6000us, below) is itself edge-interrupt-driven and can
+    // be fooled by the exact same missed/coalesced-GPIO-IRQ problem PIO
+    // was introduced to work around for byte *data* -- under heavy bus
+    // load (e.g. frequent F0 polls) the RX pin's falling edges can be
+    // serviced late enough that _highTime looks like it exceeded 6ms even
+    // though PIO, sampling in hardware, kept receiving real bytes the
+    // whole time. Because PIO is gated directly off _rxState, that false
+    // timeout disables PIO mid-frame and the rest of the payload is lost.
+    // This flag, set only around the F7 long read in the main-thread
+    // handle() path, tells rxHandleISR() "we are actively polling for
+    // this frame's bytes right now" so it can ignore that timeout for the
+    // duration instead of trusting a measurement known to be unreliable
+    // under load. Confined to the one long read that showed the problem;
+    // the ordinary short-frame recovery this timeout exists for is
+    // untouched.
+    volatile bool _f7LongReadActive = false;
 #endif
     SoftwareSerial *vistaSerial, *vistaSerialMonitor;
     bool _newExtCmd, _newCmd;
