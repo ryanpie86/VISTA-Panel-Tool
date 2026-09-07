@@ -72,6 +72,7 @@ volatile uint32_t f7BranchEntries = 0;
 // If it's nonzero, the loss is downstream of this point instead (the
 // _rxState/_highTime gate in this same function, or something after).
 volatile uint32_t rawF7ByteSeen = 0;
+volatile uint32_t nearF7ByteSeen = 0;
 volatile uint32_t pioPumpedTotal = 0;
 volatile uint32_t pioForwardedTotal = 0;
 volatile uint32_t pumpedDuringLastF7Read = 0;
@@ -207,6 +208,22 @@ void Vista::pioRxPump()
     pioPumpedTotal++;
     if (b == 0xF7)
       rawF7ByteSeen++;
+    else
+    {
+      // Bench evidence: a full session with confirmed real screen
+      // changes (i.e. real F7 broadcasts definitely occurred) produced
+      // zero rawF7ByteSeen -- PIO's hardware sampler never once saw the
+      // exact value 0xF7, despite otherwise pumping bytes normally.
+      // Tests one concrete hypothesis directly: is 0xF7 landing as a
+      // single-bit-flipped neighbor instead of the real value, which
+      // would point at PIO's sample point being marginally
+      // misaligned specifically for this bit pattern rather than the
+      // opcode being lost outright. diff is a power of two (exactly one
+      // bit set) iff b differs from 0xF7 by exactly one bit.
+      uint8_t diff = b ^ 0xF7;
+      if (diff != 0 && (diff & (diff - 1)) == 0)
+        nearF7ByteSeen++;
+    }
     // Belt-and-suspenders: PIO is now only enabled during sNormal (see
     // pioRxSetActive()), but this mirrors the same gate rxHandleISR()
     // used before calling vistaSerial->rxRead() in the software path, in
