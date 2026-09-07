@@ -134,6 +134,25 @@ public:
     // from PIO instead of this class's own interrupt-driven bit sampler.
     bool pushByte(uint8_t b);
 
+    // RP2040/Arduino-Pico port (VISTA-Panel-Tool): rxHandleISR() calls this
+    // instead of rxRead() for the rising edge that ends a bus ACK-slot's
+    // sustained low pulse (>9ms) -- see the call site's comment for why.
+    // Without it, that edge still reaches rxBits() as an ordinary
+    // transition; measured against the timestamp of whatever real edge
+    // preceded the ACK slot, a multi-ms gap looks like a very long run of
+    // same-level "masked" bits (see rxBits()'s bits/hiddenBits logic), so
+    // it force-completes whatever byte was mid-flight with its remaining
+    // bits padded from the last known level, then keeps consuming the
+    // leftover elapsed time as one or more further synthetic all-zero
+    // bytes -- bench-confirmed as the source of F7 reads stalling on a
+    // run of zero payload bytes at a fixed offset (wherever the ACK slot
+    // falls in the frame). Resetting the bit-tracking state here instead
+    // makes the next real edge -- the actual resumption of frame data --
+    // get treated as a fresh start bit measured from now, exactly like
+    // enableRx(true) primes a fresh read, rather than against a
+    // multi-millisecond-stale timestamp.
+    void resyncRx();
+
     int available();
     int peek();
     int read(bool processRxbits);

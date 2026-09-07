@@ -69,6 +69,8 @@ extern volatile uint32_t deactivatedDuringLastF7Read;
 extern volatile uint32_t edgesDuringLastF7Read;
 extern volatile uint32_t ackSlotBlockingTxCount;
 extern volatile uint32_t ackSlotTxDuringLastF7Read;
+extern volatile uint32_t ackSlotResyncCount;
+extern volatile uint32_t ackSlotResyncDuringLastF7Read;
 #endif
 
 

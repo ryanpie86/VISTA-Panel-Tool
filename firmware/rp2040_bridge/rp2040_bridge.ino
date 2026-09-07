@@ -254,7 +254,9 @@ void loop() {
                     " lastF7Deactivates=" + String(deactivatedDuringLastF7Read) +
                     " lastF7Edges=" + String(edgesDuringLastF7Read) +
                     " ackSlotTx=" + String(ackSlotBlockingTxCount) +
-                    " lastF7AckSlotTx=" + String(ackSlotTxDuringLastF7Read));
+                    " lastF7AckSlotTx=" + String(ackSlotTxDuringLastF7Read) +
+                    " ackSlotResync=" + String(ackSlotResyncCount) +
+                    " lastF7AckSlotResync=" + String(ackSlotResyncDuringLastF7Read));
 #endif
     lastHeartbeatMs = millis();
   }
