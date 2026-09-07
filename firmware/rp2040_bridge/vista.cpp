@@ -77,6 +77,13 @@ volatile uint32_t pioPumpedTotal = 0;
 volatile uint32_t pioForwardedTotal = 0;
 volatile uint32_t pumpedDuringLastF7Read = 0;
 
+// Counts only real pio_sm_set_enabled(..., false) transitions (see
+// pioRxSetActive()) -- proves or disproves whether the _f7LongReadActive
+// override in rxHandleISR()'s gating hook actually has a gap, versus PIO
+// staying enabled the whole time yet still producing nothing.
+volatile uint32_t pioDeactivateCount = 0;
+volatile uint32_t deactivatedDuringLastF7Read = 0;
+
 // arduino-pico's attachInterrupt() has no arg-passing variant (unlike
 // ESP8266/ESP32's attachInterruptArg). Since this firmware only ever runs
 // one Vista instance, route through the same file-scope instance pointer
@@ -164,6 +171,19 @@ static void pioRxSetActive(bool active)
 {
   if (s_ecpSm < 0 || active == s_ecpActive)
     return;
+  // Bench evidence: lastF7Pumped read 0 (PIO produces zero bytes across
+  // an entire ~20ms F7 read) even with the _f7LongReadActive override
+  // in rxHandleISR()'s gating hook already in place -- which by that
+  // logic should mean this function is never called with active=false
+  // during that window at all. This counter proves or disproves that
+  // directly: if it stays 0 during the window, the override has no gap
+  // and the real cause is elsewhere (e.g. PIO's FIFO stalling during
+  // the ACK-slot's blocking TX writes regardless of enable state,
+  // corrupting its bit-phase for the rest of the frame even without a
+  // full disable/restart); if it's nonzero, the override itself has a
+  // hole somewhere that hasn't been found yet.
+  if (!active)
+    pioDeactivateCount++;
   pio_sm_set_enabled(s_ecpPio, s_ecpSm, false);
   if (active)
   {
@@ -1965,8 +1985,10 @@ bool Vista::handle()
       // is not producing payload bytes during this window at all -- a
       // different class of bug than anything fixed in this file so far.
       uint32_t pumpedBeforeF7Read = pioPumpedTotal;
+      uint32_t deactivatesBeforeF7Read = pioDeactivateCount;
       readChars(F7_MESSAGE_LENGTH - 1, _cbuf, &gidx);
       pumpedDuringLastF7Read = pioPumpedTotal - pumpedBeforeF7Read;
+      deactivatedDuringLastF7Read = pioDeactivateCount - deactivatesBeforeF7Read;
       _f7LongReadActive = false;
 #else
       readChars(F7_MESSAGE_LENGTH - 1, _cbuf, &gidx);
