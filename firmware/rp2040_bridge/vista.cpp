@@ -2309,13 +2309,18 @@ void Vista::begin(int receivePin, int transmitPin, char keypadAddr, int monitorT
        gpio_set_intr_type((gpio_num_t)_rxPin, GPIO_INTR_ANYEDGE);
        gpio_isr_handler_add((gpio_num_t)_rxPin, rxISRHandler, this);
     #elif defined(USE_RP2040)
-        // Byte assembly for this pin now happens in PIO (see
+        // Byte assembly for this pin normally happens in PIO (see
         // ecp_uart_rx.pio / pioRxPump()) rather than in vistaSerial's own
-        // interrupt-driven bit sampler -- init that here. The attachInterrupt()
-        // below is still needed independently of PIO: rxHandleISR() uses it
-        // for the bus-level preamble/ACK-slot timing state machine, which
-        // is unrelated to byte framing and untouched by this change.
+        // interrupt-driven bit sampler -- init that here, unless
+        // VISTA_RP2040_USE_PIO_RX (see vista.h) has it turned off, in
+        // which case s_ecpSm stays -1 and every PIO call site already
+        // falls back to the plain interrupt-driven path on its own. The
+        // attachInterrupt() below is needed either way: rxHandleISR()
+        // uses it for the bus-level preamble/ACK-slot timing state
+        // machine, which is unrelated to byte framing.
+#if VISTA_RP2040_USE_PIO_RX
         pioRxInit();
+#endif
         // no attachInterruptArg() on arduino-pico -- see rxISRTrampolineRP2040
         attachInterrupt(digitalPinToInterrupt(_rxPin), rxISRTrampolineRP2040, CHANGE);
         #else

@@ -10,6 +10,23 @@
 #define USE_RP2040
 #endif
 
+// PIO-based RX (ecp_uart_rx.pio / Vista::pioRxInit()/pioRxPump()) was
+// added to remove CPU/interrupt-load jitter from byte sampling, after
+// bench testing showed the plain interrupt-driven decoder (the same
+// approach upstream uses on ESP8266/ESP32) losing sync under real bus
+// load. It's since needed a long chain of fixes to keep its own state
+// machine correctly synchronized with rxHandleISR()'s pre-existing
+// bus-protocol state machine (_rxState) -- gating, FIFO races, ACK-slot
+// interactions -- and F7 frames specifically still aren't decoding
+// reliably even with those fixed. Set to 0 to fall back to the plain
+// interrupt-driven decoder for RX byte assembly (still on RP2040,
+// unrelated to ESP8266/ESP32's own separate code path): every PIO call
+// site already guards on s_ecpSm==-1 and falls back to
+// vistaSerial->rxRead() on its own when pioRxInit() is never called, so
+// this is a clean, reversible toggle -- no code path needs deleting to
+// flip it back once/if PIO's remaining issues are understood.
+#define VISTA_RP2040_USE_PIO_RX 0
+
 // Upstream builds either as an ESPHome component (needs
 // esphome/core/defines.h) or standalone via its own ARDUINO_MQTT escape
 // hatch, which skips that include. We want standalone, always -- but a
