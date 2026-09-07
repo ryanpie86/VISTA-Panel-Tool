@@ -45,7 +45,7 @@ extern volatile uint32_t f7BranchEntries;
 extern volatile uint32_t rawF7ByteSeen;
 extern volatile uint32_t pioPumpedTotal;
 extern volatile uint32_t pioForwardedTotal;
-extern volatile uint32_t f7FollowupBurst;
+extern volatile uint32_t pumpedDuringLastF7Read;
 #endif
 
 

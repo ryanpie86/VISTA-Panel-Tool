@@ -225,15 +225,20 @@ void loop() {
     // forwarded is pumped minus whatever the gate right after it drops --
     // far below pumped means the gate is still the bottleneck; forwarded
     // climbing normally while LONGREAD bytes stays 0 means bytes reach
-    // vistaSerial's buffer but readChars() never sees them. f7burst is a
-    // separate, more basic check on PIO's raw output alone: bytes drained
-    // in the SAME FIFO pass right after a 0xF7 sighting -- 0 here despite
-    // real load means PIO itself stops producing bytes right after the
-    // opcode, upstream of every gate in this file.
+    // vistaSerial's buffer but readChars() never sees them.
+    //
+    // lastF7Pumped is the decisive one: total bytes PIO produced
+    // (pumped, any value) across the ENTIRE ~20ms window of the most
+    // recent F7 long-read attempt specifically -- not just one FIFO
+    // drain pass. Near 0 despite forwarded==pumped everywhere else
+    // (ruling out every software gate in this file) means PIO's
+    // hardware sampler itself stops producing payload bytes during
+    // that window -- a different class of bug than anything fixed here
+    // so far, upstream of every gate and the ring-buffer race alike.
     Serial.println("RAWPIO pumped=" + String(pioPumpedTotal) +
                     " rawF7=" + String(rawF7ByteSeen) +
                     " forwarded=" + String(pioForwardedTotal) +
-                    " f7burst=" + String(f7FollowupBurst));
+                    " lastF7Pumped=" + String(pumpedDuringLastF7Read));
 #endif
     lastHeartbeatMs = millis();
   }
