@@ -216,6 +216,14 @@ void loop() {
                     " timeouts=" + String(longReadTimeouts) +
                     " avgPolls=" + String(lra ? longReadPolls / lra : 0) +
                     " avgUs=" + String(lra ? longReadElapsedUs / lra : 0));
+    // Raw diagnostic: sits directly on PIO's FIFO output in pioRxPump(),
+    // before any _rxState gating or dispatch logic. Answers one question:
+    // does PIO's hardware sampler ever see a 0xF7 byte on the wire at
+    // all? rawF7=0 while pumped climbs normally means the byte is lost
+    // at the PIO/bit-sampling layer itself, upstream of every fix so
+    // far; rawF7>0 means the loss is downstream of this point instead.
+    Serial.println("RAWPIO pumped=" + String(pioPumpedTotal) +
+                    " rawF7=" + String(rawF7ByteSeen));
 #endif
     lastHeartbeatMs = millis();
   }
