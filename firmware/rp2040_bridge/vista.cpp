@@ -289,6 +289,15 @@ void Vista::readChars(int ct, char buf[], int *idx)
   {
 #if defined(USE_RP2040)
     if (longRead) longReadPolls++;
+    // pioRxPump() otherwise only runs once, at the very top of handle() --
+    // but this loop can block here internally for up to 20ms per call
+    // waiting for more bytes, and nothing else re-drains the PIO FIFO
+    // during that window. Without this, only whatever PIO had already
+    // buffered before handle() started this call would ever reach
+    // vistaSerial's byte buffer, stalling long reads after the first
+    // batch. Draining every iteration keeps latency close to what the
+    // original per-edge interrupt-driven path had.
+    pioRxPump();
 #endif
     if (vistaSerial->available())
     {
@@ -1970,6 +1979,18 @@ void Vista::begin(int receivePin, int transmitPin, char keypadAddr, int monitorT
 // panel data rx interrupt - yellow line
 #ifdef ESP32
   vistaSerial = new SoftwareSerial(_rxPin, _txPin, invertRx, invertTx, 2, 60 * 10, inputRx);
+#elif defined(USE_RP2040)
+  // bufSize=2 (the byte-level ring buffer, not the bit-level isrBufSize)
+  // is fine for the original software path, which feeds it one byte at a
+  // time paced to real bit-arrival speed. PIO doesn't self-pace that way
+  // -- it assembles bytes continuously in hardware regardless of when
+  // pioRxPump() gets around to draining it, so a burst of several bytes
+  // can land at once. Bench-confirmed: bufSize=2 overflowed constantly
+  // once PIO was introduced (SoftwareSerial::overflow(), surfaced via
+  // Vista::rxOverflow()), badly enough that even the leading 0xF7 opcode
+  // byte of a frame never survived to be recognized. 64 bytes comfortably
+  // covers one full 45-byte F7 frame plus margin.
+  vistaSerial = new SoftwareSerial(_rxPin, _txPin, invertRx, invertTx, 64, 60 * 10, inputRx);
 #else
   vistaSerial = new SoftwareSerial(_rxPin, _txPin, invertRx, invertTx, 2, 60 * 10, inputRx);
 #endif
