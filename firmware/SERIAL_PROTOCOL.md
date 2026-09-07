@@ -19,8 +19,12 @@ same `PushUpdatePollingTransport` base class and the same zone_discovery
 walk logic work unmodified against either transport.
 
 This file is the contract `rp2040_serial.py` implements against. The actual
-RP2040 firmware (PlatformIO/Arduino, reusing esphome-vistaECP's ECP class
-outside of ESPHome per its README) is a separate build -- not included here.
+RP2040 firmware lives in `rp2040_bridge/` (Arduino sketch, reusing
+esphome-vistaECP's `Vista` class outside of ESPHome per its README, patched
+for RP2040/arduino-pico) -- see `rp2040_bridge/README.md` for build
+instructions, what got patched and why, and the current breadboard-stage
+limitations (fixed keypad address, single partition, no
+address-conflict detection yet).
 
 ## Pi -> RP2040
 
@@ -52,7 +56,10 @@ address, same as a real alpha keypad would show). `alpha_text` is the raw
 like the TPI transport's alpha_text field. Framing rule mirrors TPI: since
 alpha_text can theoretically contain a comma, the RP2040 must send it last
 and the Pi parser must split on the first 3 commas only, not comma-split the
-whole line.
+whole line. `flags_hex`'s bit layout is this firmware's own convention (not
+copied from TPI/Envisalink) -- see `rp2040_bridge/README.md` "`flags_hex`
+bit layout"; only bit 0 ("armed") is currently consumed downstream
+(`vista_tool/transports/base.py`'s `KeypadUpdate.is_disarmed`).
 
 ```
 ERR,<message>\n
