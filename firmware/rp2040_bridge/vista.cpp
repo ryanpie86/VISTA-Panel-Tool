@@ -55,6 +55,16 @@ volatile uint32_t keySendCharsInLastFrame = 0; // how many characters got combin
 volatile uint32_t keySendResent = 0;        // writeChars() resending the same buffer after no matching F6 echo
 volatile uint32_t keySendGaveUp = 0;        // writeChars()'s _retries>4 abandonment -- queue forced empty, no real ack
 volatile uint32_t keySendAcked = 0;         // handle()'s F6 echo actually matched _expectByte -- genuine success
+// A fourth, earlier way sendPending() can end up "done" without ever
+// reaching writeChars() at all: the ACK-slot address announcement itself
+// (rxHandleISR()'s addrToBitmask1/2/3 triplet) never gets a matching F6
+// invite from the panel. keySendAddrAnnounced counts each announcement
+// attempt; keySendPendingAckTimeout counts one timing out unanswered
+// after its 2-cycle wait; keySendAddrDropped counts the queued key
+// finally being dropped outright after 3 such unanswered announcements.
+volatile uint32_t keySendAddrAnnounced = 0;
+volatile uint32_t keySendPendingAckTimeout = 0;
+volatile uint32_t keySendAddrDropped = 0;
 
 // arduino-pico's attachInterrupt() has no arg-passing variant (unlike
 // ESP8266/ESP32's attachInterruptArg). Since this firmware only ever runs
@@ -1372,6 +1382,13 @@ void IRAM_ATTR Vista::rxHandleISR()
       {
         if (_pendingAck) { //we wait at least 2 cycles to wait for an F6 response and if not we cancel the pending ack and allow a new one to go through
           if (ackCount > 1) {
+#if defined(USE_RP2040)
+            // Bench diagnostic: this address announcement never got a
+            // matching F6 invite within the 2-cycle wait -- pairs with
+            // keySendAddrAnnounced to show what fraction of our
+            // announcements the panel never responds to at all.
+            keySendPendingAckTimeout++;
+#endif
             _pendingAck=false;
             ackCount=0;
           } else
@@ -1380,6 +1397,18 @@ void IRAM_ATTR Vista::rxHandleISR()
 
         if (!_retries && _outbuf[_outbufIdx].count > 2)
         { // after x failed _retries to send, we remove this entry from the buffer
+#if defined(USE_RP2040)
+          // Bench diagnostic: this drops a queued key WITHOUT writeChars()
+          // ever running -- the panel never followed up our ACK-slot
+          // address announcement with a matching F6 invite within 3
+          // attempts. This is a THIRD way Vista::sendPending() can end up
+          // reporting "done" (queue empty, _retries==0) with nothing ever
+          // actually transmitted to the panel, on top of writeChars()'s
+          // own give-up path -- and unlike that one, it means our address
+          // announcement itself never got a reply at all, not just that a
+          // sent frame went unacknowledged.
+          keySendAddrDropped++;
+#endif
           ackAddr = _outbuf[_outbufIdx].kpaddr;
           _outbufIdx = (_outbufIdx + 1) % CMDBUFSIZE; // Not valid or no answer. Skip it.
           while (_outbufIdx != _inbufIdx && _outbuf[_outbufIdx].kpaddr == ackAddr)
@@ -1413,9 +1442,12 @@ void IRAM_ATTR Vista::rxHandleISR()
             pioRxPump();
 #endif
             _pendingAck=true;
+#if defined(USE_RP2040)
+            keySendAddrAnnounced++;
+#endif
 
           }
-          
+
         }
       }
       // Resume sNormal if this excursion interrupted an active capture

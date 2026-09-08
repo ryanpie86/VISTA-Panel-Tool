@@ -58,6 +58,9 @@ extern volatile uint32_t keySendCharsInLastFrame;
 extern volatile uint32_t keySendResent;
 extern volatile uint32_t keySendGaveUp;
 extern volatile uint32_t keySendAcked;
+extern volatile uint32_t keySendAddrAnnounced;
+extern volatile uint32_t keySendPendingAckTimeout;
+extern volatile uint32_t keySendAddrDropped;
 #endif
 
 
