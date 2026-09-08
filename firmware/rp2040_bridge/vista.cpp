@@ -1819,6 +1819,26 @@ uint8_t Vista::getExtBytes()
   while (vistaSerialMonitor->available())
   {
     x = vistaSerialMonitor->read();
+#if defined(USE_RP2040)
+    // Bench diagnostic: raw, unprocessed dump of every byte the Green-wire
+    // monitor tap (PIN_GREEN_MON, a passive hardware tap independent of
+    // our own send-side bookkeeping) sees -- our own outgoing TX and any
+    // real keypad's transmissions land here identically, since the tap
+    // can't tell them apart. Printed at the point of consumption, before
+    // anything below (the accumulate-until-_markPulse/decodePacket()
+    // logic) gets a chance to misframe or swallow it into a multi-byte
+    // message -- this is ground truth for what's actually on the wire,
+    // nothing more. Needed because address 16's own ACK-slot announcement
+    // never gets a matching F6 reply from the panel despite correct
+    // encoding and real edges appearing on the line (txEdgeCountRP2040
+    // climbs during the attempt) -- this is the only way left to check
+    // whether the actual bytes that make it onto the wire match what we
+    // intended (0xFF,0xFF,0xFE for address 16), without any protocol
+    // theory or vendor documentation involved.
+    Serial.print("GREENRAW ");
+    if (x < 0x10) Serial.print('0');
+    Serial.println(x, HEX);
+#endif
     if (_extIdx < OUTBUFSIZE)
       _extbuf[_extIdx++] = x;
     _markPulse = 0; // reset pulse flag to wait for next inter msg gap
