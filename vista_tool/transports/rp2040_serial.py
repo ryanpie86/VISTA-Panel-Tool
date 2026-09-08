@@ -15,7 +15,7 @@ from .polling_base import PushUpdatePollingTransport
 
 logger = logging.getLogger(__name__)
 
-KEY_ACK_TIMEOUT_SECONDS = 3.0
+KEY_ACK_TIMEOUT_SECONDS_PER_KEY = 3.0
 
 
 class RP2040SerialTransport(PushUpdatePollingTransport):
@@ -54,8 +54,8 @@ class RP2040SerialTransport(PushUpdatePollingTransport):
 
     def _handle_line(self, line: str) -> None:
         if line.startswith("ACK,"):
-            _, partition_s, ch = line.split(",", 2)
-            key = (int(partition_s), ch)
+            _, partition_s, keys = line.split(",", 2)
+            key = (int(partition_s), keys)
             ev = self._pending_acks.get(key)
             if ev:
                 ev.set()
@@ -82,16 +82,27 @@ class RP2040SerialTransport(PushUpdatePollingTransport):
         # PONG or unrecognized -- ignore
 
     async def send_keys(self, partition: int, keys: str) -> None:
+        # Sent as one KEY command carrying the whole string, not one command
+        # per character: the firmware queues every key immediately into the
+        # underlying ECP library's own outbound ring buffer, which the
+        # panel's real poll cycle then drains at native bus speed. Waiting
+        # for an ACK after each individual character -- a full USB round
+        # trip plus a wait for the next real bus poll, every time -- was
+        # bench-confirmed too slow for a multi-digit code: the panel's own
+        # inter-digit entry timeout reset before a 7-digit installer code
+        # finished sending, even though every individual key transmitted
+        # and acked fine on its own. See firmware/SERIAL_PROTOCOL.md.
         assert self._writer is not None
-        for ch in keys:
-            key = (partition, ch)
-            ack = asyncio.Event()
-            self._pending_acks[key] = ack
-            self._writer.write(f"KEY,{partition},{ch}\n".encode())
-            await self._writer.drain()
-            try:
-                await asyncio.wait_for(ack.wait(), timeout=KEY_ACK_TIMEOUT_SECONDS)
-            except asyncio.TimeoutError:
-                logger.warning("No ACK from RP2040 for key %r on partition %s", ch, partition)
-            finally:
-                self._pending_acks.pop(key, None)
+        if not keys:
+            return
+        key = (partition, keys)
+        ack = asyncio.Event()
+        self._pending_acks[key] = ack
+        self._writer.write(f"KEY,{partition},{keys}\n".encode())
+        await self._writer.drain()
+        try:
+            await asyncio.wait_for(ack.wait(), timeout=KEY_ACK_TIMEOUT_SECONDS_PER_KEY * len(keys))
+        except asyncio.TimeoutError:
+            logger.warning("No ACK from RP2040 for keys %r on partition %s", keys, partition)
+        finally:
+            self._pending_acks.pop(key, None)

@@ -65,8 +65,8 @@ static const uint8_t KEYPAD_ADDR = 16;
 // multi-keypad build doesn't need a wire-format change.
 static const int PARTITION = 1;
 
-static const unsigned long KEY_PACE_MS = 500;         // SERIAL_PROTOCOL.md: ~0.5s inter-key pacing, enforced here
-static const unsigned long KEY_TX_TIMEOUT_MS = 4000;  // give up waiting for the panel to poll our address
+static const unsigned long KEY_PACE_MS = 500;         // SERIAL_PROTOCOL.md: ~0.5s pacing between KEY batches, enforced here
+static const unsigned long KEY_TX_TIMEOUT_MS_PER_KEY = 4000;  // give up waiting for the panel to poll our address, per queued key
 static const unsigned long BUS_FAULT_REPORT_MS = 5000;  // rate-limit repeated "keybus down" ERR lines
 
 Vista vista;
@@ -81,7 +81,7 @@ static Adafruit_NeoPixel statusPixel(1, PIN_STATUS_LED, NEO_RGB + NEO_KHZ800);
 #endif
 
 static bool keyPending = false;
-static char pendingChar = 0;
+static String pendingKeys;
 static unsigned long pendingSinceMs = 0;
 static unsigned long lastKeySentMs = 0;
 
@@ -288,10 +288,10 @@ void loop() {
 
   if (keyPending) {
     if (!vista.sendPending()) {
-      sendLine("ACK," + String(PARTITION) + "," + String(pendingChar));
+      sendLine("ACK," + String(PARTITION) + "," + pendingKeys);
       keyPending = false;
-    } else if (millis() - pendingSinceMs > KEY_TX_TIMEOUT_MS) {
-      sendLine("ERR,key transmit timeout for '" + String(pendingChar) +
+    } else if (millis() - pendingSinceMs > KEY_TX_TIMEOUT_MS_PER_KEY * (unsigned long)pendingKeys.length()) {
+      sendLine("ERR,key transmit timeout for '" + pendingKeys +
                 "' -- panel never polled keypad address " + String(KEYPAD_ADDR));
       keyPending = false;
     }
@@ -374,15 +374,29 @@ static void handleSerialLine(const String &line) {
       return;
     }
 
-    char key = line.charAt(secondComma + 1);
+    String keys = line.substring(secondComma + 1);
 
-    if (!isValidEcpKey(key)) {
-      sendLine("ERR,unsupported key '" + String(key) + "' in KEY command: " + line);
+    for (size_t i = 0; i < keys.length(); i++) {
+      if (!isValidEcpKey(keys.charAt(i))) {
+        sendLine("ERR,unsupported key '" + String(keys.charAt(i)) + "' in KEY command: " + line);
+        return;
+      }
+    }
+
+    // Vista::write() appends to the library's own outbound ring buffer
+    // (CMDBUFSIZE entries) with no overflow check of its own -- queuing
+    // more than that before any of it drains would silently wrap and
+    // corrupt already-queued-but-unsent entries. Not reachable before this
+    // batching existed (each KEY command only ever carried one character),
+    // so guard it explicitly now that a single command can carry many.
+    if ((int)keys.length() >= CMDBUFSIZE) {
+      sendLine("ERR,key batch too long (" + String(keys.length()) + " chars, max " +
+                String(CMDBUFSIZE - 1) + "): " + line);
       return;
     }
 
     if (keyPending) {
-      sendLine("ERR,key '" + String(key) + "' dropped -- previous key still pending");
+      sendLine("ERR,keys '" + keys + "' dropped -- previous batch still pending");
       return;
     }
 
@@ -391,9 +405,22 @@ static void handleSerialLine(const String &line) {
       delay(KEY_PACE_MS - (now - lastKeySentMs));
     }
 
-    vista.write(key);
+    // Queue every key immediately, back-to-back: Vista::write() just
+    // appends to the library's own outbound ring buffer, and the panel's
+    // real poll cycle drains it at native bus speed from there -- same as
+    // how a human pressing keys on a physical keypad only needs each
+    // press registered quickly, not a full bus-poll round trip before the
+    // next press. Waiting for an ACK after every single character (a full
+    // USB round trip *and* a wait for the next real bus poll, per key)
+    // was bench-confirmed too slow: a 7-digit installer code took long
+    // enough key by key that the panel's own inter-digit code-entry
+    // timeout reset before the sequence finished, even though every
+    // individual key transmitted and acked fine on its own.
+    for (size_t i = 0; i < keys.length(); i++) {
+      vista.write(keys.charAt(i));
+    }
     keyPending = true;
-    pendingChar = key;
+    pendingKeys = keys;
     pendingSinceMs = millis();
     lastKeySentMs = pendingSinceMs;
     return;
