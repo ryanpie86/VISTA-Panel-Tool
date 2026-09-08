@@ -40,85 +40,6 @@ void IRAM_ATTR txISRHandler(void* args)
 volatile uint32_t rxEdgeCountRP2040 = 0;
 volatile uint32_t txEdgeCountRP2040 = 0;
 
-// Bench diagnostic: readChars()'s own poll loop, isolated to "long" reads
-// (ct >= 20, which in practice means only the 44-byte F7 body -- every
-// other frame type reads far fewer bytes per call) so this signal isn't
-// diluted by the much more numerous short reads. Tells us whether the
-// poll loop is running near its expected ~4us/iteration cadence (an
-// interference/starvation problem, e.g. from other code -- possibly this
-// firmware's own diagnostic printing -- hogging the CPU) versus genuinely
-// getting no new bytes at all even though it's polling at full speed (an
-// ISR/edge-loss problem instead).
-volatile uint32_t longReadAttempts = 0;
-volatile uint32_t longReadPolls = 0;
-volatile uint32_t longReadBytes = 0;
-volatile uint32_t longReadTimeouts = 0;
-volatile uint32_t longReadElapsedUs = 0;
-volatile uint32_t f7BranchEntries = 0;
-
-// Bench diagnostic: every fix so far has addressed a real, confirmed bug
-// (PIO/_rxState gating, an ISR blocking PIO's FIFO drain, a ring-buffer
-// race between the two pump() call sites) without resolving the actual
-// symptom -- F7 never reaching the dispatcher at all, even across a live
-// run the user confirmed included several real keypad display changes
-// (i.e. real F7 broadcasts definitely occurred on the wire). These
-// counters sit at the lowest possible level -- directly on PIO's raw FIFO
-// output in pioRxPump(), before ANY gating or dispatch logic -- to answer
-// one question directly: does PIO's hardware sampler ever see a 0xF7
-// byte on the wire at all? If rawF7ByteSeen stays 0 while pioPumpedTotal
-// climbs normally, the byte is being lost at the PIO/bit-sampling layer
-// itself (wrong framing/alignment for this specific transmission,
-// possibly baud- or preamble-related) -- upstream of every fix so far.
-// If it's nonzero, the loss is downstream of this point instead (the
-// _rxState/_highTime gate in this same function, or something after).
-volatile uint32_t rawF7ByteSeen = 0;
-volatile uint32_t nearF7ByteSeen = 0;
-volatile uint32_t pioPumpedTotal = 0;
-volatile uint32_t pioForwardedTotal = 0;
-volatile uint32_t pumpedDuringLastF7Read = 0;
-
-// Counts only real pio_sm_set_enabled(..., false) transitions (see
-// pioRxSetActive()). Used during the F7-payload investigation (see the
-// gating hook's comment in rxHandleISR()) to confirm a since-reverted
-// override had no gap; kept as an ongoing sanity check that PIO now
-// legitimately deactivates once per real _rxState excursion, as intended.
-volatile uint32_t pioDeactivateCount = 0;
-volatile uint32_t deactivatedDuringLastF7Read = 0;
-
-// See the comment at its use site (the F7 branch's edgesBeforeF7Read
-// snapshot) for what this answers.
-volatile uint32_t edgesDuringLastF7Read = 0;
-
-// Counts entries into either ACK-slot TX block in rxHandleISR() (fault-queue
-// ack and outgoing-keypress ack) -- i.e. real occurrences of the up-to-3-write,
-// up-to-~6ms window where vistaSerial->write() blocks with global interrupts
-// disabled. Now that PIO RX is disabled (VISTA_RP2040_USE_PIO_RX 0), the
-// software bit-bang decoder has no hardware FIFO to fall back on during that
-// window -- unlike PIO, which kept sampling regardless of interrupt state, the
-// plain interrupt-driven decoder needs a live ISR to catch each bit edge, so
-// any real edge landing in this blind spot is unrecoverable. Snapshotting this
-// across an F7 read (ackSlotTxDuringLastF7Read) tests whether ACK-slot TX
-// events landing mid-frame correlate with truncated F7 payload captures.
-volatile uint32_t ackSlotBlockingTxCount = 0;
-volatile uint32_t ackSlotTxDuringLastF7Read = 0;
-
-// Counts entries into rxHandleISR()'s ackSlotBoundary path -- i.e. every
-// ACK-slot excursion's ending edge, whether or not an ACK was actually
-// transmitted for it (ackSlotBlockingTxCount above only counts the latter,
-// which is why it stayed 0 while F7 truncation kept happening). Bench
-// evidence pointed at this edge itself, not at our own TX: routed to
-// vistaSerial->rxRead() like an ordinary edge, its ~9ms+-stale timestamp
-// gets read by rxBits() as a long run of same-level "masked" bits,
-// force-completing whatever byte was mid-flight and then synthesizing
-// further all-zero bytes from the leftover elapsed time -- matching the
-// observed zero-byte runs exactly. See ECPSoftwareSerial::resyncRx()'s
-// declaration for the fix (skip rxRead() for this edge, reset bit-tracking
-// state instead). ackSlotResyncDuringLastF7Read snapshots this across an
-// F7 read the same way the other lastF7* counters do, to confirm resyncRx()
-// fires on reads that previously stalled and that they now complete.
-volatile uint32_t ackSlotResyncCount = 0;
-volatile uint32_t ackSlotResyncDuringLastF7Read = 0;
-
 // arduino-pico's attachInterrupt() has no arg-passing variant (unlike
 // ESP8266/ESP32's attachInterruptArg). Since this firmware only ever runs
 // one Vista instance, route through the same file-scope instance pointer
@@ -206,8 +127,6 @@ static void pioRxSetActive(bool active)
 {
   if (s_ecpSm < 0 || active == s_ecpActive)
     return;
-  if (!active)
-    pioDeactivateCount++;
   pio_sm_set_enabled(s_ecpPio, s_ecpSm, false);
   if (active)
   {
@@ -249,43 +168,13 @@ void Vista::pioRxPump()
   while (!pio_sm_is_rx_fifo_empty(s_ecpPio, s_ecpSm))
   {
     uint8_t b = (uint8_t)(pio_sm_get(s_ecpPio, s_ecpSm) >> 24);
-    pioPumpedTotal++;
-    if (b == 0xF7)
-      rawF7ByteSeen++;
-    else
-    {
-      // Bench evidence: a full session with confirmed real screen
-      // changes (i.e. real F7 broadcasts definitely occurred) produced
-      // zero rawF7ByteSeen -- PIO's hardware sampler never once saw the
-      // exact value 0xF7, despite otherwise pumping bytes normally.
-      // Tests one concrete hypothesis directly: is 0xF7 landing as a
-      // single-bit-flipped neighbor instead of the real value, which
-      // would point at PIO's sample point being marginally
-      // misaligned specifically for this bit pattern rather than the
-      // opcode being lost outright. diff is a power of two (exactly one
-      // bit set) iff b differs from 0xF7 by exactly one bit.
-      uint8_t diff = b ^ 0xF7;
-      if (diff != 0 && (diff & (diff - 1)) == 0)
-        nearF7ByteSeen++;
-    }
     // Belt-and-suspenders: PIO is only enabled during sNormal (see
     // pioRxSetActive(), and rxHandleISR()'s gating hook that drives it),
     // but this mirrors the same gate rxHandleISR() used before calling
     // vistaSerial->rxRead() in the software path, in case a byte was
     // already in the FIFO right at a state transition.
-    //
-    // This gate previously also OR'd in _f7LongReadActive, to forward
-    // bytes PIO kept physically sampling through a _rxState excursion
-    // mid-F7-read. That paired override (in rxHandleISR()'s gating hook)
-    // has been reverted -- it was itself the cause of F7 payloads never
-    // arriving, not a fix for it (see that hook's comment) -- so PIO no
-    // longer stays enabled through such an excursion in the first place,
-    // making the extra OR here dead weight; removed to match.
     if (_rxState == sNormal || _highTime == 0)
-    {
       vistaSerial->pushByte(b);
-      pioForwardedTotal++;
-    }
   }
   restore_interrupts(savedIrq);
 }
@@ -442,42 +331,24 @@ void Vista::readChars(int ct, char buf[], int *idx)
   unsigned long timeout = millis();
   unsigned long readTimeoutMs = 20;
 #if defined(USE_RP2040)
+  // F2/F8/FA frames can also land here via a corrupted/oversized length
+  // byte read from the packet itself, not just the real 44-byte F7 body
+  // (ct is exactly F7_MESSAGE_LENGTH-1 only for that one call site) --
+  // and since `timeout` only resets when a byte is actually read, a slow
+  // trickle of real bytes on one of those calls chains many sub-timeout
+  // gaps into far longer total blocking than the timeout value itself
+  // suggests. Bench-confirmed: a blanket 500ms applied to every ct>=20
+  // call let one such false long read block the main loop for ~2s.
+  // F7 itself gets the wider 500ms (needed to survive a real ACK-slot
+  // gap mid-frame); everything else stays at the old 100ms. Ordinary
+  // short reads elsewhere in this class keep 20ms.
   bool longRead = (ct >= 20);
-  unsigned long startUs = 0;
-  if (longRead) {
-    longReadAttempts++;
-    startUs = micros();
-    // Bench evidence: with the PIO gating and _rxState-recovery bugs
-    // fixed (see rxHandleISR()'s _lowTime>9000 branch), F7 long reads now
-    // capture real payload for the first time -- but still stop short of
-    // the full 44 bytes, giving up on the gap timeout below with ZERO
-    // ACK-slot excursions recorded during the read (pioDeactivateCount
-    // unchanged across the window) and an edge count consistent with just
-    // the bytes actually decoded, not with further real bus activity
-    // going undecoded. Both point the same way: real bytes stop arriving
-    // partway through, for longer than the old 100ms, for a reason
-    // unrelated to any excursion this file already tracks.
-    //
-    // Widening this is a direct experiment to find out how long that real
-    // gap actually is -- but scoped to genuine F7 reads specifically
-    // (ct is exactly F7_MESSAGE_LENGTH-1 only for that one call site).
-    // F2/F8/FA frames also land here via a corrupted/oversized length
-    // byte read from the packet itself (an already-known false trigger,
-    // unrelated to F7) -- and since `timeout` only resets when a byte is
-    // actually read, a slow trickle of real bytes on one of THOSE calls
-    // chains many sub-timeout gaps into far longer total blocking than
-    // the timeout value itself suggests. Confirmed on the bench: with a
-    // blanket 500ms applied to every ct>=20 call, an F2-triggered false
-    // long read (f7Branch stayed 0 all session) averaged over 2 seconds
-    // of real main-loop blocking per attempt. Keep those at the old
-    // 100ms -- ordinary short reads elsewhere in this class keep 20ms.
+  if (longRead)
     readTimeoutMs = (ct == F7_MESSAGE_LENGTH - 1) ? 500 : 100;
-  }
 #endif
   while (x < ct && millis() - timeout < readTimeoutMs)
   {
 #if defined(USE_RP2040)
-    if (longRead) longReadPolls++;
     // pioRxPump() otherwise only runs once, at the very top of handle() --
     // but this loop can block here internally for up to readTimeoutMs per
     // gap between bytes, and nothing else re-drains the PIO FIFO during
@@ -493,9 +364,6 @@ void Vista::readChars(int ct, char buf[], int *idx)
       timeout = millis();
       buf[idxval++] = vistaSerial->read();
       x++;
-#if defined(USE_RP2040)
-      if (longRead) longReadBytes++;
-#endif
     }
 #ifdef ESP32
     else
@@ -505,12 +373,6 @@ void Vista::readChars(int ct, char buf[], int *idx)
      delayMicroseconds(4);
 #endif
   }
-#if defined(USE_RP2040)
-  if (longRead) {
-    longReadElapsedUs += (micros() - startUs);
-    if (x < ct) longReadTimeouts++;
-  }
-#endif
   *idx = idxval;
 }
 
@@ -1446,9 +1308,6 @@ void IRAM_ATTR Vista::rxHandleISR()
 
       if (ackAddr > 0 && ackAddr < 24)
       {
-#if defined(USE_RP2040)
-        ackSlotBlockingTxCount++;
-#endif
         vistaSerial->write(addrToBitmask1(ackAddr), false, 4800);
 #if defined(USE_RP2040)
         // Bench evidence: F7 long reads captured zero bytes beyond the
@@ -1505,9 +1364,6 @@ void IRAM_ATTR Vista::rxHandleISR()
             _outbuf[_outbufIdx].count++;
           
           if (ackAddr > 0 && ackAddr < 24) {
-#if defined(USE_RP2040)
-            ackSlotBlockingTxCount++;
-#endif
             vistaSerial->write(addrToBitmask1(ackAddr), false, 4800);
 #if defined(USE_RP2040)
             // See the identical comment on the other addrToBitmask1/2/3
@@ -1579,11 +1435,11 @@ void IRAM_ATTR Vista::rxHandleISR()
   // A prior fix here (keeping PIO forced "active" via _f7LongReadActive
   // across an _rxState excursion during an F7 read, to survive the bus's
   // ~9ms+ ACK-opportunity slot without losing the frame) was reverted.
-  // Bench diagnostics (edgesDuringLastF7Read / deactivatedDuringLastF7Read
-  // / pumpedDuringLastF7Read together) proved that override was itself
-  // the bug: it kept PIO enabled straight through that same multi-ms
-  // sustained-low ACK slot -- exactly the condition pioRxInit()'s own
-  // comment warns about. PIO's wait-for-start-bit instruction is a level
+  // Bench diagnostics (since removed, their job done) proved that
+  // override was itself the bug: it kept PIO enabled straight through
+  // that same multi-ms sustained-low ACK slot -- exactly the condition
+  // pioRxInit()'s own comment warns about. PIO's wait-for-start-bit
+  // instruction is a level
   // check, not an edge detector: left running into a low period already
   // in progress, it immediately "frames" that sustained low as a garbage
   // byte (or several), desyncing its bit-phase for the rest of the frame
@@ -1613,10 +1469,7 @@ void IRAM_ATTR Vista::rxHandleISR()
   // failed PIO claim degrades to the old behavior instead of silently
   // losing reception entirely.
   if (ackSlotBoundary)
-  {
-    ackSlotResyncCount++;
     vistaSerial->resyncRx();
-  }
   else if (s_ecpSm < 0 && (_rxState == sNormal || _highTime == 0))
     vistaSerial->rxRead();
 #else
@@ -2045,61 +1898,11 @@ bool Vista::handle()
 
     if (x == 0xF7)
     {
-#if defined(USE_RP2040)
-      // Bench diagnostic: the existing "longRead" counters in readChars()
-      // fire on any ct>=20 call, which was assumed to mean only this F7
-      // branch -- but F2/F8/FA frames call readChars() with a length byte
-      // read from the packet itself (readChars(_cbuf[N], ...)), which
-      // could also exceed 20 if that byte is corrupted. This counter is
-      // unambiguous: it only increments here, in the real F7 branch.
-      f7BranchEntries++;
-#endif
       vistaSerial->setBaud(4800);
       gidx = 0;
 
       _cbuf[gidx++] = x;
-#if defined(USE_RP2040)
-      // Bench diagnostics kept across the fix in rxHandleISR()'s PIO
-      // gating hook (see its comment) that stopped forcing PIO to stay
-      // enabled through a _rxState excursion mid-F7-read -- that override
-      // was proven to be the actual cause of payload loss, not a
-      // workaround for it: deactivatedDuringLastF7Read read 0 (no gap in
-      // the old override) while lastF7Pumped also read 0 (PIO produced
-      // nothing regardless) and lastF7Edges read nonzero on real hits
-      // (the wire did toggle), together isolating the bug to PIO itself
-      // "framing" the ~9ms ACK-slot's sustained low as garbage data while
-      // kept alive through it. These three before/after snapshots stay in
-      // place to verify the fix: deactivatedDuringLastF7Read should now
-      // read nonzero on any F7 read that spans an ACK slot (PIO legitimately
-      // disabling and cleanly restarting, as originally designed), and
-      // lastF7Pumped should start capturing real payload bytes instead of
-      // consistently reading 0.
-      uint32_t pumpedBeforeF7Read = pioPumpedTotal;
-      uint32_t deactivatesBeforeF7Read = pioDeactivateCount;
-      uint32_t edgesBeforeF7Read = rxEdgeCountRP2040;
-      // Tests the leading hypothesis with PIO disabled: the ACK-slot branch
-      // in rxHandleISR() can block for up to ~6ms (up to 3 back-to-back
-      // vistaSerial->write() calls) with global interrupts disabled. PIO had
-      // a hardware FIFO that kept sampling through that window regardless;
-      // the plain interrupt-driven decoder has nothing, so a real bit edge
-      // landing in that blind spot is unrecoverable. If ackSlotTxDuringLastF7Read
-      // is nonzero on reads that capture few/no payload bytes, this window is
-      // the culprit.
-      uint32_t ackSlotTxBeforeF7Read = ackSlotBlockingTxCount;
-      // See ackSlotResyncCount's declaration: this is the fix for the
-      // ACK-slot boundary edge itself, independent of whether we transmit.
-      // Nonzero here on a read that now completes (vs. previously stalling)
-      // is the confirmation this was the real cause.
-      uint32_t ackSlotResyncBeforeF7Read = ackSlotResyncCount;
       readChars(F7_MESSAGE_LENGTH - 1, _cbuf, &gidx);
-      pumpedDuringLastF7Read = pioPumpedTotal - pumpedBeforeF7Read;
-      deactivatedDuringLastF7Read = pioDeactivateCount - deactivatesBeforeF7Read;
-      edgesDuringLastF7Read = rxEdgeCountRP2040 - edgesBeforeF7Read;
-      ackSlotTxDuringLastF7Read = ackSlotBlockingTxCount - ackSlotTxBeforeF7Read;
-      ackSlotResyncDuringLastF7Read = ackSlotResyncCount - ackSlotResyncBeforeF7Read;
-#else
-      readChars(F7_MESSAGE_LENGTH - 1, _cbuf, &gidx);
-#endif
 
       if (!validChksum(_cbuf, 0, gidx) )
         _cbuf[12] = 0x77;

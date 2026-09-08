@@ -198,66 +198,6 @@ void loop() {
                     " F9=" + String(cntF9) + " FA=" + String(cntFA) +
                     " F2=" + String(cntF2) + " F8=" + String(cntF8) +
                     " FB=" + String(cntFB) + " other=" + String(cntOther));
-#if defined(ARDUINO_ARCH_RP2040)
-    // readChars()'s own poll loop, isolated to any "long" (ct>=20) call --
-    // turns out that's NOT unique to the F7 branch: F2/F8/FA frames call
-    // readChars() with a length byte read from the packet itself
-    // (readChars(_cbuf[N], ...)), which can also exceed 20 if that byte
-    // is corrupted. f7BranchEntries (incremented directly in the real
-    // if(x==0xF7) branch in vista.cpp) is the unambiguous count to compare
-    // F7seen against -- if longRead attempts >> f7BranchEntries, most of
-    // this traffic isn't F7 at all. avgPolls very low relative to the
-    // ~20ms/4us ~= 5000 polls a full timeout should produce means
-    // something is starving the poll loop of CPU time (an interference
-    // problem); avgPolls near that ceiling with bytes still short means
-    // the loop is running at full speed but genuinely isn't getting new
-    // data (points back at the ISR/edge-loss theory).
-    uint32_t lra = longReadAttempts;
-    Serial.println("LONGREAD attempts=" + String(lra) +
-                    " f7Branch=" + String(f7BranchEntries) +
-                    " polls=" + String(longReadPolls) +
-                    " bytes=" + String(longReadBytes) +
-                    " timeouts=" + String(longReadTimeouts) +
-                    " avgPolls=" + String(lra ? longReadPolls / lra : 0) +
-                    " avgUs=" + String(lra ? longReadElapsedUs / lra : 0));
-    // Raw diagnostic: sits directly on PIO's FIFO output in pioRxPump(),
-    // before any _rxState gating or dispatch logic. Answers one question:
-    // does PIO's hardware sampler ever see a 0xF7 byte on the wire at
-    // all? rawF7=0 while pumped climbs normally means the byte is lost
-    // at the PIO/bit-sampling layer itself, upstream of every fix so
-    // far; rawF7>0 means the loss is downstream of this point instead.
-    // forwarded is pumped minus whatever the gate right after it drops --
-    // far below pumped means the gate is still the bottleneck; forwarded
-    // climbing normally while LONGREAD bytes stays 0 means bytes reach
-    // vistaSerial's buffer but readChars() never sees them.
-    //
-    // lastF7Pumped is the decisive one: total bytes PIO produced
-    // (pumped, any value) across the ENTIRE ~20ms window of the most
-    // recent F7 long-read attempt specifically -- not just one FIFO
-    // drain pass. Near 0 despite forwarded==pumped everywhere else
-    // (ruling out every software gate in this file) means PIO's
-    // hardware sampler itself stops producing payload bytes during
-    // that window -- a different class of bug than anything fixed here
-    // so far, upstream of every gate and the ring-buffer race alike.
-    // nearF7 counts bytes exactly one bit away from 0xF7 -- a session
-    // with confirmed real screen changes (real F7 broadcasts) but
-    // rawF7=0 the whole time raises the question of whether PIO's
-    // sample point is landing 0xF7 as a single-bit-flipped neighbor
-    // instead of the true value. High relative to rawF7 supports that;
-    // near 0 rules it out and points elsewhere instead.
-    Serial.println("RAWPIO pumped=" + String(pioPumpedTotal) +
-                    " rawF7=" + String(rawF7ByteSeen) +
-                    " nearF7=" + String(nearF7ByteSeen) +
-                    " forwarded=" + String(pioForwardedTotal) +
-                    " lastF7Pumped=" + String(pumpedDuringLastF7Read) +
-                    " deactivates=" + String(pioDeactivateCount) +
-                    " lastF7Deactivates=" + String(deactivatedDuringLastF7Read) +
-                    " lastF7Edges=" + String(edgesDuringLastF7Read) +
-                    " ackSlotTx=" + String(ackSlotBlockingTxCount) +
-                    " lastF7AckSlotTx=" + String(ackSlotTxDuringLastF7Read) +
-                    " ackSlotResync=" + String(ackSlotResyncCount) +
-                    " lastF7AckSlotResync=" + String(ackSlotResyncDuringLastF7Read));
-#endif
     lastHeartbeatMs = millis();
   }
 

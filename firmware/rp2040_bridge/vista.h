@@ -53,24 +53,6 @@
 // rxISRTrampolineRP2040() in vista.cpp.
 extern volatile uint32_t rxEdgeCountRP2040;
 extern volatile uint32_t txEdgeCountRP2040;
-extern volatile uint32_t longReadAttempts;
-extern volatile uint32_t longReadPolls;
-extern volatile uint32_t longReadBytes;
-extern volatile uint32_t longReadTimeouts;
-extern volatile uint32_t longReadElapsedUs;
-extern volatile uint32_t f7BranchEntries;
-extern volatile uint32_t rawF7ByteSeen;
-extern volatile uint32_t nearF7ByteSeen;
-extern volatile uint32_t pioPumpedTotal;
-extern volatile uint32_t pioForwardedTotal;
-extern volatile uint32_t pumpedDuringLastF7Read;
-extern volatile uint32_t pioDeactivateCount;
-extern volatile uint32_t deactivatedDuringLastF7Read;
-extern volatile uint32_t edgesDuringLastF7Read;
-extern volatile uint32_t ackSlotBlockingTxCount;
-extern volatile uint32_t ackSlotTxDuringLastF7Read;
-extern volatile uint32_t ackSlotResyncCount;
-extern volatile uint32_t ackSlotResyncDuringLastF7Read;
 #endif
 
 
