@@ -85,6 +85,16 @@ class RP2040SerialTransport(PushUpdatePollingTransport):
             # of the stable wire contract in SERIAL_PROTOCOL.md.
             logger.info(line[len("DEBUG,"):])
             return
+        if line.startswith("GREENRAW") or line.startswith("GREENEDGE"):
+            # Bench-only Green-wire diagnostics (see vista.cpp's
+            # getExtBytes()/txHandleISR() comments) -- these use a space
+            # after the tag, not a comma, unlike every other line here.
+            # Without this branch they fall into the catch-all below and
+            # get silently discarded even though the firmware is sending
+            # them correctly (confirmed by seeing them fine over a raw
+            # Serial Monitor connection instead of this transport).
+            logger.info(line)
+            return
         # PONG or unrecognized -- ignore
 
     async def send_keys(self, partition: int, keys: str) -> None:
