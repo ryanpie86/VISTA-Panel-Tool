@@ -40,6 +40,22 @@ void IRAM_ATTR txISRHandler(void* args)
 volatile uint32_t rxEdgeCountRP2040 = 0;
 volatile uint32_t txEdgeCountRP2040 = 0;
 
+// Bench diagnostic: distinguishes a genuinely panel-acknowledged outgoing
+// keypress send from Vista::writeChars()'s own "give up after too many
+// retries" path -- both end with the outbound queue empty and _retries==0,
+// which is all Vista::sendPending() checks, so both currently look
+// identical to an "ACK" from the .ino sketch's point of view. Needed
+// because bench evidence raised exactly this ambiguity: an installer-code
+// batch reported a clean ACK with a plausible few-second drain time, but
+// the panel showed no reaction at all -- consistent with every character
+// silently exhausting its 5 send attempts and being dropped, not with a
+// real successful handshake.
+volatile uint32_t keySendFramesBuilt = 0;   // writeChars() actually assembling a NEW buffer (first attempt, not a resend)
+volatile uint32_t keySendCharsInLastFrame = 0; // how many characters got combined into that most recent new buffer
+volatile uint32_t keySendResent = 0;        // writeChars() resending the same buffer after no matching F6 echo
+volatile uint32_t keySendGaveUp = 0;        // writeChars()'s _retries>4 abandonment -- queue forced empty, no real ack
+volatile uint32_t keySendAcked = 0;         // handle()'s F6 echo actually matched _expectByte -- genuine success
+
 // arduino-pico's attachInterrupt() has no arg-passing variant (unlike
 // ESP8266/ESP32's attachInterruptArg). Since this firmware only ever runs
 // one Vista instance, route through the same file-scope instance pointer
@@ -1092,6 +1108,9 @@ void Vista::writeChars()
   // just clear the queue
   if (_retries > 4)
   {
+#if defined(USE_RP2040)
+    keySendGaveUp++;
+#endif
     _retries = 0;
     _retryAddr = 0;
     _expectByte = 0;
@@ -1204,7 +1223,17 @@ void Vista::writeChars()
       checksum += (char)_tmpOutBuf[x];
     }
     _tmpOutBuf[x] = (char)((checksum-1) ^ 0xFF);
+#if defined(USE_RP2040)
+    keySendFramesBuilt++;
+    keySendCharsInLastFrame = sz + 1;
+#endif
   }
+#if defined(USE_RP2040)
+  else
+  {
+    keySendResent++;
+  }
+#endif
   sendBuffer(_tmpOutBuf,_tmpOutBuf[1] + 2);
   _expectByte = _tmpOutBuf[0];
   _expectCmd = 0xf6;
@@ -1828,7 +1857,9 @@ bool Vista::handle()
     {
       if (x == _expectByte)
       {
-        
+#if defined(USE_RP2040)
+        keySendAcked++;
+#endif
         _retries = 0;
         _retriesf9 = 0;
         _expectByte = 0;

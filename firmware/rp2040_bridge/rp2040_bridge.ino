@@ -84,6 +84,16 @@ static bool keyPending = false;
 static String pendingKeys;
 static unsigned long pendingSinceMs = 0;
 static unsigned long lastKeySentMs = 0;
+// Snapshots of vista.cpp's keySend* bench counters taken when a batch is
+// queued, so the ACK/DEBUG lines can report deltas scoped to just this
+// batch -- see those counters' declaration in vista.cpp for why: Vista::
+// sendPending() can't tell a genuine panel-acknowledged send apart from
+// writeChars() quietly giving up after 5 failed attempts, so the plain
+// ACK line alone can't answer whether a send actually worked.
+static uint32_t pendingFramesBefore = 0;
+static uint32_t pendingResentBefore = 0;
+static uint32_t pendingGaveUpBefore = 0;
+static uint32_t pendingAckedBefore = 0;
 
 static bool lastKeybusConnected = false;
 static unsigned long lastBusFaultReportMs = 0;
@@ -299,9 +309,22 @@ void loop() {
       // other cause (wrong address, wrong sequence, etc.) if programming
       // mode still isn't entered despite a clean ACK.
       unsigned long elapsedMs = millis() - pendingSinceMs;
+      // Vista::sendPending() (what the ACK above is based on) can't tell
+      // a genuine panel-acknowledged send apart from writeChars() quietly
+      // giving up after 5 failed attempts -- both end with the outbound
+      // queue empty. framesBuilt/resent/gaveUp/acked (see their
+      // declaration in vista.cpp) answer that directly: gaveUp>0 here
+      // means this "ACK" is a false positive -- the panel never actually
+      // confirmed receiving the data, no matter how clean the ACK looks.
+      uint32_t framesBuilt = keySendFramesBuilt - pendingFramesBefore;
+      uint32_t resent = keySendResent - pendingResentBefore;
+      uint32_t gaveUp = keySendGaveUp - pendingGaveUpBefore;
+      uint32_t acked = keySendAcked - pendingAckedBefore;
       sendLine("ACK," + String(PARTITION) + "," + pendingKeys);
       sendLine("DEBUG,key batch '" + pendingKeys + "' (" + String(pendingKeys.length()) +
-                " keys) drained in " + String(elapsedMs) + "ms");
+                " keys) drained in " + String(elapsedMs) + "ms framesBuilt=" + String(framesBuilt) +
+                " charsInFrame=" + String(keySendCharsInLastFrame) + " resent=" + String(resent) +
+                " gaveUp=" + String(gaveUp) + " acked=" + String(acked));
       keyPending = false;
     } else if (millis() - pendingSinceMs > KEY_TX_TIMEOUT_MS_PER_KEY * (unsigned long)pendingKeys.length()) {
       sendLine("ERR,key transmit timeout for '" + pendingKeys +
@@ -429,6 +452,10 @@ static void handleSerialLine(const String &line) {
     // enough key by key that the panel's own inter-digit code-entry
     // timeout reset before the sequence finished, even though every
     // individual key transmitted and acked fine on its own.
+    pendingFramesBefore = keySendFramesBuilt;
+    pendingResentBefore = keySendResent;
+    pendingGaveUpBefore = keySendGaveUp;
+    pendingAckedBefore = keySendAcked;
     for (size_t i = 0; i < keys.length(); i++) {
       vista.write(keys.charAt(i));
     }

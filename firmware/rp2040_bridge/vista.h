@@ -53,6 +53,11 @@
 // rxISRTrampolineRP2040() in vista.cpp.
 extern volatile uint32_t rxEdgeCountRP2040;
 extern volatile uint32_t txEdgeCountRP2040;
+extern volatile uint32_t keySendFramesBuilt;
+extern volatile uint32_t keySendCharsInLastFrame;
+extern volatile uint32_t keySendResent;
+extern volatile uint32_t keySendGaveUp;
+extern volatile uint32_t keySendAcked;
 #endif
 
 
