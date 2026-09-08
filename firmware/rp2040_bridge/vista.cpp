@@ -1551,8 +1551,20 @@ void IRAM_ATTR Vista::txHandleISR()
 {
   disableInterrupts();
   //if ((!sending || !_filterOwnTx) && _rxState == sNormal)
-  if (_rxState == sNormal)
-    vistaSerialMonitor->rxRead();
+  // Bench evidence: this gate silently explained an entire session's worth
+  // of zero GREENRAW output (see getExtBytes()) despite confirmed real
+  // activity on the Green wire (both our own address-16 announcement and
+  // a real keypad's actual keypresses, the latter proven by its keypress
+  // visibly reaching the panel -- DISP messages changing, F6 invites
+  // decoded on Yellow). _rxState is the YELLOW-wire state machine; ACK-
+  // slot excursions (where any keypad, real or emulated, actually gets to
+  // transmit on Green) normally leave it in sPolling, not sNormal, since
+  // they only resume sNormal when they interrupt an in-progress Yellow
+  // frame capture -- which an ACK slot usually isn't doing. So this gate
+  // was dropping Green-wire edges almost precisely when there was
+  // something on Green worth seeing. Loosened to unconditional while this
+  // is under bench investigation.
+  vistaSerialMonitor->rxRead();
   restoreInterrupts();
 }
 #endif
@@ -2289,6 +2301,15 @@ void Vista::begin(int receivePin, int transmitPin, char keypadAddr, int monitorT
 // interrupt for capturing keypad/module data on green transmit line
 #ifdef ESP32
   vistaSerialMonitor = new SoftwareSerial(_monitorPin, -1, invertMon, false, 2, OUTBUFSIZE * 10, inputMon);
+#elif defined(USE_RP2040)
+  // bufSize=2 was fine while txHandleISR() gated rxRead() on _rxState==
+  // sNormal (see that function's comment for why that gate is now
+  // loosened for bench diagnosis) -- almost nothing ever reached this
+  // decoder before. Now that it sees real traffic, match the same
+  // overflow-avoidance bump vistaSerial got on RP2040 (see that
+  // constructor's comment) rather than risk losing bytes to a 2-entry
+  // ring buffer under real bus load.
+  vistaSerialMonitor = new SoftwareSerial(_monitorPin, -1, invertMon, false, 64, OUTBUFSIZE * 10, inputMon);
 #else
   vistaSerialMonitor = new SoftwareSerial(_monitorPin, -1, invertMon, false, 2, OUTBUFSIZE * 10, inputMon);
 #endif
