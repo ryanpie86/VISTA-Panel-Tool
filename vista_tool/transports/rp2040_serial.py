@@ -79,6 +79,12 @@ class RP2040SerialTransport(PushUpdatePollingTransport):
         if line.startswith("ERR,"):
             logger.error("RP2040 reported bus error: %s", line[4:])
             return
+        if line.startswith("DEBUG,"):
+            # Bench-only firmware diagnostics (e.g. key-batch drain timing)
+            # -- surfaced at INFO so bench scripts see them, but not part
+            # of the stable wire contract in SERIAL_PROTOCOL.md.
+            logger.info(line[len("DEBUG,"):])
+            return
         # PONG or unrecognized -- ignore
 
     async def send_keys(self, partition: int, keys: str) -> None:

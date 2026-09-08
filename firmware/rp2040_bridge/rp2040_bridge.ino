@@ -288,7 +288,20 @@ void loop() {
 
   if (keyPending) {
     if (!vista.sendPending()) {
+      // Bench diagnostic: batching (see handleSerialLine()'s KEY parsing)
+      // fixed the software-side round-trip cost per key, but real
+      // transmission still only happens on an actual bus poll of our
+      // keypad address -- if that poll cycle itself is slow, a multi-key
+      // batch could still take long enough in real bus time to outlast
+      // the panel's own inter-digit code-entry timeout, independent of
+      // anything on our end. This reports exactly how long the whole
+      // batch took to drain on the bus, to tell that apart from some
+      // other cause (wrong address, wrong sequence, etc.) if programming
+      // mode still isn't entered despite a clean ACK.
+      unsigned long elapsedMs = millis() - pendingSinceMs;
       sendLine("ACK," + String(PARTITION) + "," + pendingKeys);
+      sendLine("DEBUG,key batch '" + pendingKeys + "' (" + String(pendingKeys.length()) +
+                " keys) drained in " + String(elapsedMs) + "ms");
       keyPending = false;
     } else if (millis() - pendingSinceMs > KEY_TX_TIMEOUT_MS_PER_KEY * (unsigned long)pendingKeys.length()) {
       sendLine("ERR,key transmit timeout for '" + pendingKeys +

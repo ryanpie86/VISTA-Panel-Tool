@@ -53,6 +53,13 @@ async def main() -> None:
     await transport.connect()
     try:
         await transport.send_keys(args.partition, args.keys)
+        # send_keys() returns as soon as the ACK line is processed, which
+        # can race the DEBUG line the firmware sends right after it (and
+        # any DISP update the panel broadcasts shortly after) -- give the
+        # background read loop a moment to catch up before printing/
+        # closing, so both actually show up here instead of getting
+        # dropped when the connection tears down.
+        await asyncio.sleep(1.0)
         update = transport.last_update(args.partition)
         shown = update.alpha_text if update else "(no display update seen yet)"
         print(f"sent {args.keys!r} -> {shown!r}")
