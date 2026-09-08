@@ -1,25 +1,29 @@
 """Send a sequence of ECP keypresses to the RP2040 bridge, bench-testing tool.
 
-Manually re-typing/pasting one `KEY,<partition>,<char>` serial command at a
-time is slow enough (human copy-paste + window-switching, easily several
-seconds per key) that it can outlast the panel's own inter-digit code-entry
-timeout -- each key still ACKs individually (that only confirms the RP2040
-transmitted it during a real poll of its keypad address), but the panel
-resets its "how many digits of the code have I seen so far" progress before
-a multi-digit sequence like an installer code completes, so nothing appears
-to happen even though every key is being delivered.
+Sending keys one at a time -- whether by hand (pasting a `KEY,<partition>,
+<char>` serial command per key) or by waiting for each key's own ACK before
+sending the next -- is bench-confirmed too slow for a multi-digit sequence
+like an installer code: each ACK only confirms the RP2040 transmitted that
+key during a real poll of its keypad address, which still costs a full USB
+round trip plus a wait for the next bus poll cycle, every single time. Chain
+enough of those and the panel's own inter-digit code-entry timeout resets
+before the sequence finishes, even though every individual key transmitted
+and acked just fine on its own.
 
-This drives the existing RP2040SerialTransport.send_keys() helper instead,
-which already sends the next key as soon as the previous one's ACK (or a
-3s timeout) comes back -- limited only by the firmware's own 500ms
-inter-key pacing, not by how fast a human can paste.
+This sends the whole key sequence as ONE `KEY,<partition>,<keys>` command
+(see firmware/SERIAL_PROTOCOL.md) via RP2040SerialTransport.send_keys().
+The firmware queues every key immediately into the underlying ECP library's
+own outbound buffer, and the panel's real poll cycle drains it at native bus
+speed from there -- same as how a human pressing keys on a physical keypad
+only needs each press registered quickly, not a full bus-poll round trip
+before the next press.
 
 Usage:
     python scripts/send_keys.py /dev/ttyACM0 4112800
     python scripts/send_keys.py /dev/ttyACM0 '*99' --partition 1
 
-Prints the partition's display (DISP) text after each key so you can watch
-the panel's prompt advance in real time.
+Prints the partition's display (DISP) text once the whole batch is
+confirmed sent (or once the ACK wait times out).
 """
 
 from __future__ import annotations
@@ -48,11 +52,10 @@ async def main() -> None:
     transport = RP2040SerialTransport(device=args.device, baud=args.baud)
     await transport.connect()
     try:
-        for ch in args.keys:
-            await transport.send_keys(args.partition, ch)
-            update = transport.last_update(args.partition)
-            shown = update.alpha_text if update else "(no display update seen yet)"
-            print(f"sent {ch!r} -> {shown!r}")
+        await transport.send_keys(args.partition, args.keys)
+        update = transport.last_update(args.partition)
+        shown = update.alpha_text if update else "(no display update seen yet)"
+        print(f"sent {args.keys!r} -> {shown!r}")
     finally:
         await transport.close()
 

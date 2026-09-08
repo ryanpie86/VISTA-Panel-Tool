@@ -29,10 +29,21 @@ address-conflict detection yet).
 ## Pi -> RP2040
 
 ```
-KEY,<partition>,<char>\n
+KEY,<partition>,<keys>\n
 ```
-Send one virtual-keypad keystroke as the emulated keypad on the bus. RP2040
-handles the actual pulse-train transmission and required inter-key pacing.
+Send one or more virtual-keypad keystrokes, in order, as the emulated keypad
+on the bus (`<keys>` is not limited to one character -- e.g. `KEY,1,4112800`
+queues a whole 7-digit installer code in one command). RP2040 queues every
+character immediately into the underlying ECP library's own outbound
+buffer; the panel's real poll cycle then drains it at native bus speed.
+This matters: waiting for an ACK after each individual character -- a full
+USB round trip *and* a wait for the next real bus poll, every time -- was
+bench-confirmed too slow for a multi-digit sequence, resetting the panel's
+own inter-digit code-entry timeout before the sequence finished, even
+though every individual key transmitted and acked fine on its own. Queuing
+the whole batch up front instead mirrors how a human pressing keys on a
+physical keypad only needs each press registered quickly, not a full
+bus-poll round trip before the next press.
 
 ```
 PING\n
@@ -42,9 +53,10 @@ Liveness check.
 ## RP2040 -> Pi
 
 ```
-ACK,<partition>,<char>\n
+ACK,<partition>,<keys>\n
 ```
-Confirms a KEY command was transmitted on the bus.
+Confirms a KEY command's entire batch of keys was transmitted on the bus
+(`<keys>` echoes exactly what the KEY command sent).
 
 ```
 DISP,<partition>,<flags_hex>,<alpha_text>\n
@@ -76,9 +88,14 @@ Reply to PING.
 
 ## Notes carried over from the protocol notes doc
 
-- Keystroke pacing (~0.5s) is enforced firmware-side, not by the Pi -- the
-  Pi's `send_keys()` just waits for each ACK before sending the next key,
-  same call shape as the TPI transport.
+- Keystroke pacing (~0.5s) is enforced firmware-side, not by the Pi, but
+  only *between separate KEY commands* -- within one KEY command's batch,
+  every key queues back-to-back with no pacing delay, relying on the
+  underlying ECP library's own outbound buffer and the panel's real poll
+  cycle to pace actual bus transmission. This differs from the TPI
+  transport, which still sends and acks one key per command (Envisalink's
+  own poll cycle to its keypad address is apparently fast enough for that
+  to work there; this bus's isn't).
 - The Pi-side wait-for-display patterns (settle-based "Pattern A" vs.
   poll-until-match "Pattern B") are unchanged -- see
   VISTA_ZONE_DISCOVERY_PROTOCOL_NOTES.md section 3. This protocol only
