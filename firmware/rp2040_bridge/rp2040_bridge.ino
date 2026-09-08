@@ -339,6 +339,29 @@ void loop() {
                 " gaveUp=" + String(gaveUp) + " acked=" + String(acked) +
                 " addrAnnounced=" + String(addrAnnounced) + " pendingAckTimeout=" + String(pendingAckTimeout) +
                 " addrDropped=" + String(addrDropped));
+      // Bench diagnostic: raw Green-wire edge trace, bypassing
+      // vistaSerialMonitor's own (unhardened, likely just as fragile as
+      // the Yellow decoder was before this investigation's earlier fixes)
+      // software-UART decode entirely -- see its declaration in vista.cpp
+      // for why. Dumped here, right after this key batch finishes, so it
+      // covers whatever edges happened on Green during our own
+      // announcement attempt (plus any real keypad activity that
+      // happened to land in the same recent window -- the buffer holds
+      // the most recent GREEN_EDGE_TRACE_SIZE edges regardless of source).
+      {
+        uint32_t n = greenEdgeTraceCount < GREEN_EDGE_TRACE_SIZE ? greenEdgeTraceCount : GREEN_EDGE_TRACE_SIZE;
+        uint32_t startIdx = (greenEdgeTraceHead + GREEN_EDGE_TRACE_SIZE - n) % GREEN_EDGE_TRACE_SIZE;
+        sendLine("GREENEDGE trace: " + String(n) + " edges (total ever seen=" + String(greenEdgeTraceCount) + ")");
+        uint32_t prevTs = 0;
+        for (uint32_t i = 0; i < n; i++) {
+          uint32_t idx = (startIdx + i) % GREEN_EDGE_TRACE_SIZE;
+          uint32_t ts = greenEdgeTimestamps[idx];
+          bool lvl = greenEdgeLevels[idx];
+          uint32_t delta = (i == 0) ? 0 : (ts - prevTs);
+          sendLine("GREENEDGE " + String(delta) + "us level=" + String(lvl ? 1 : 0));
+          prevTs = ts;
+        }
+      }
       keyPending = false;
     } else if (millis() - pendingSinceMs > KEY_TX_TIMEOUT_MS_PER_KEY * (unsigned long)pendingKeys.length()) {
       sendLine("ERR,key transmit timeout for '" + pendingKeys +
