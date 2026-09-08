@@ -94,6 +94,9 @@ static uint32_t pendingFramesBefore = 0;
 static uint32_t pendingResentBefore = 0;
 static uint32_t pendingGaveUpBefore = 0;
 static uint32_t pendingAckedBefore = 0;
+static uint32_t pendingAddrAnnouncedBefore = 0;
+static uint32_t pendingPendingAckTimeoutBefore = 0;
+static uint32_t pendingAddrDroppedBefore = 0;
 
 static bool lastKeybusConnected = false;
 static unsigned long lastBusFaultReportMs = 0;
@@ -320,11 +323,22 @@ void loop() {
       uint32_t resent = keySendResent - pendingResentBefore;
       uint32_t gaveUp = keySendGaveUp - pendingGaveUpBefore;
       uint32_t acked = keySendAcked - pendingAckedBefore;
+      // A key can also vanish from the queue even earlier than
+      // writeChars()'s own give-up: the ACK-slot address announcement
+      // itself (see rxHandleISR()) can go unanswered by the panel and the
+      // entry gets dropped before writeChars() ever runs. addrAnnounced
+      // vs addrDropped/pendingAckTimeout shows whether the panel is
+      // hearing our announcements at all.
+      uint32_t addrAnnounced = keySendAddrAnnounced - pendingAddrAnnouncedBefore;
+      uint32_t pendingAckTimeout = keySendPendingAckTimeout - pendingPendingAckTimeoutBefore;
+      uint32_t addrDropped = keySendAddrDropped - pendingAddrDroppedBefore;
       sendLine("ACK," + String(PARTITION) + "," + pendingKeys);
       sendLine("DEBUG,key batch '" + pendingKeys + "' (" + String(pendingKeys.length()) +
                 " keys) drained in " + String(elapsedMs) + "ms framesBuilt=" + String(framesBuilt) +
                 " charsInFrame=" + String(keySendCharsInLastFrame) + " resent=" + String(resent) +
-                " gaveUp=" + String(gaveUp) + " acked=" + String(acked));
+                " gaveUp=" + String(gaveUp) + " acked=" + String(acked) +
+                " addrAnnounced=" + String(addrAnnounced) + " pendingAckTimeout=" + String(pendingAckTimeout) +
+                " addrDropped=" + String(addrDropped));
       keyPending = false;
     } else if (millis() - pendingSinceMs > KEY_TX_TIMEOUT_MS_PER_KEY * (unsigned long)pendingKeys.length()) {
       sendLine("ERR,key transmit timeout for '" + pendingKeys +
@@ -456,6 +470,9 @@ static void handleSerialLine(const String &line) {
     pendingResentBefore = keySendResent;
     pendingGaveUpBefore = keySendGaveUp;
     pendingAckedBefore = keySendAcked;
+    pendingAddrAnnouncedBefore = keySendAddrAnnounced;
+    pendingPendingAckTimeoutBefore = keySendPendingAckTimeout;
+    pendingAddrDroppedBefore = keySendAddrDropped;
     for (size_t i = 0; i < keys.length(); i++) {
       vista.write(keys.charAt(i));
     }
