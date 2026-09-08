@@ -40,6 +40,29 @@ void IRAM_ATTR txISRHandler(void* args)
 volatile uint32_t rxEdgeCountRP2040 = 0;
 volatile uint32_t txEdgeCountRP2040 = 0;
 
+// Bench diagnostic: raw edge-timing trace for the Green wire, entirely
+// bypassing vistaSerialMonitor's own software-UART byte decode. That
+// decode is a second, independent instance of the exact same naive
+// continuous-bit-tracking software UART that needed multiple rounds of
+// hardening earlier in this investigation (the ACK-slot resync fix, the
+// ring-buffer size fix) before it could reliably decode the Yellow wire
+// -- none of that hardening was ever applied to this Green-wire copy, so
+// there's no reason to expect it's any more reliable. Bench evidence: our
+// own outgoing TX (a tight, back-to-back burst of writes with no gaps)
+// shows up fine as GREENRAW output; a real keypad's more naturally
+// sporadic transmission timing never does, in an otherwise-identical
+// session with heavy confirmed real keypad activity. That's exactly the
+// signature of the same gap-misinterpretation bug this project already
+// found and fixed once, just in the twin decoder nobody's touched.
+// Recording raw timestamp+level pairs sidesteps that decoder completely
+// -- ground truth about when edges happen and which direction, whether
+// or not any software UART could ever turn them into a byte.
+// GREEN_EDGE_TRACE_SIZE is #defined in vista.h so the .ino sketch shares it.
+volatile uint32_t greenEdgeTimestamps[GREEN_EDGE_TRACE_SIZE];
+volatile bool greenEdgeLevels[GREEN_EDGE_TRACE_SIZE];
+volatile uint32_t greenEdgeTraceHead = 0;  // next slot to write, wraps
+volatile uint32_t greenEdgeTraceCount = 0; // total edges ever recorded
+
 // Bench diagnostic: distinguishes a genuinely panel-acknowledged outgoing
 // keypress send from Vista::writeChars()'s own "give up after too many
 // retries" path -- both end with the outbound queue empty and _retries==0,
@@ -1564,6 +1587,15 @@ void IRAM_ATTR Vista::txHandleISR()
   // was dropping Green-wire edges almost precisely when there was
   // something on Green worth seeing. Loosened to unconditional while this
   // is under bench investigation.
+#if defined(USE_RP2040)
+  {
+    uint32_t idx = greenEdgeTraceHead % GREEN_EDGE_TRACE_SIZE;
+    greenEdgeTimestamps[idx] = micros();
+    greenEdgeLevels[idx] = gpio_get((uint)_monitorPin);
+    greenEdgeTraceHead = (greenEdgeTraceHead + 1) % GREEN_EDGE_TRACE_SIZE;
+    greenEdgeTraceCount++;
+  }
+#endif
   vistaSerialMonitor->rxRead();
   restoreInterrupts();
 }

@@ -53,6 +53,14 @@
 // rxISRTrampolineRP2040() in vista.cpp.
 extern volatile uint32_t rxEdgeCountRP2040;
 extern volatile uint32_t txEdgeCountRP2040;
+// Raw Green-wire edge-timing trace -- see the matching comment above its
+// declaration in vista.cpp. Shared size #define so the .ino sketch can
+// iterate the same ring buffer without hardcoding its length twice.
+#define GREEN_EDGE_TRACE_SIZE 64
+extern volatile uint32_t greenEdgeTimestamps[GREEN_EDGE_TRACE_SIZE];
+extern volatile bool greenEdgeLevels[GREEN_EDGE_TRACE_SIZE];
+extern volatile uint32_t greenEdgeTraceHead;
+extern volatile uint32_t greenEdgeTraceCount;
 extern volatile uint32_t keySendFramesBuilt;
 extern volatile uint32_t keySendCharsInLastFrame;
 extern volatile uint32_t keySendResent;
