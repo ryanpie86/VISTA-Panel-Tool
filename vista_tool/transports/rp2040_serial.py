@@ -15,7 +15,15 @@ from .polling_base import PushUpdatePollingTransport
 
 logger = logging.getLogger(__name__)
 
-KEY_ACK_TIMEOUT_SECONDS_PER_KEY = 3.0
+# Must exceed the firmware's own KEY_TX_TIMEOUT_MS_PER_KEY (4000ms, in
+# rp2040_bridge.ino) with real margin -- bench-confirmed that 3.0s here
+# (shorter than the firmware's 4s) let this client give up and fire the
+# next send while the firmware was still finishing the previous one,
+# which then correctly rejected it with "previous batch still pending".
+# Harmless (the firmware's own state was never actually confused), but
+# it meant every other logged attempt was a wasted rejection instead of
+# a real send.
+KEY_ACK_TIMEOUT_SECONDS_PER_KEY = 5.0
 
 
 class RP2040SerialTransport(PushUpdatePollingTransport):
