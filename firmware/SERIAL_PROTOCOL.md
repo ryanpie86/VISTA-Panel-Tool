@@ -88,14 +88,19 @@ Reply to PING.
 
 ## Notes carried over from the protocol notes doc
 
-- Keystroke pacing (~0.5s) is enforced firmware-side, not by the Pi, but
-  only *between separate KEY commands* -- within one KEY command's batch,
-  every key queues back-to-back with no pacing delay, relying on the
-  underlying ECP library's own outbound buffer and the panel's real poll
-  cycle to pace actual bus transmission. This differs from the TPI
-  transport, which still sends and acks one key per command (Envisalink's
-  own poll cycle to its keypad address is apparently fast enough for that
-  to work there; this bus's isn't).
+- There is no artificial pacing delay between KEY commands or between the
+  keys within one KEY command's batch -- every key queues immediately into
+  the underlying ECP library's own outbound buffer as soon as it arrives
+  (rejected only if a previous batch is still pending), relying on that
+  buffer and the panel's own real poll cycle to pace actual bus
+  transmission. A firmware-side `delay()` used to throttle new KEY commands
+  to once per ~0.5s; it was removed because it blocked the entire main loop
+  (including RX/ACK-slot processing) for no protocol reason -- a real
+  keypad has no equivalent restriction, and a tool user entering a time-
+  sensitive code (e.g. a duress code) must not be made to wait on it. This
+  differs from the TPI transport, which still sends and acks one key per
+  command (Envisalink's own poll cycle to its keypad address is apparently
+  fast enough for that to work there; this bus's isn't).
 - The Pi-side wait-for-display patterns (settle-based "Pattern A" vs.
   poll-until-match "Pattern B") are unchanged -- see
   VISTA_ZONE_DISCOVERY_PROTOCOL_NOTES.md section 3. This protocol only
