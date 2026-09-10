@@ -65,7 +65,6 @@ static const uint8_t KEYPAD_ADDR = 16;
 // multi-keypad build doesn't need a wire-format change.
 static const int PARTITION = 1;
 
-static const unsigned long KEY_PACE_MS = 500;         // SERIAL_PROTOCOL.md: ~0.5s pacing between KEY batches, enforced here
 static const unsigned long KEY_TX_TIMEOUT_MS_PER_KEY = 4000;  // give up waiting for the panel to poll our address, per queued key
 static const unsigned long BUS_FAULT_REPORT_MS = 5000;  // rate-limit repeated "keybus down" ERR lines
 
@@ -83,7 +82,6 @@ static Adafruit_NeoPixel statusPixel(1, PIN_STATUS_LED, NEO_RGB + NEO_KHZ800);
 static bool keyPending = false;
 static String pendingKeys;
 static unsigned long pendingSinceMs = 0;
-static unsigned long lastKeySentMs = 0;
 // Snapshots of vista.cpp's keySend* bench counters taken when a batch is
 // queued, so the ACK/DEBUG lines can report deltas scoped to just this
 // batch -- see those counters' declaration in vista.cpp for why: Vista::
@@ -487,11 +485,6 @@ static void handleSerialLine(const String &line) {
       return;
     }
 
-    unsigned long now = millis();
-    if (now - lastKeySentMs < KEY_PACE_MS) {
-      delay(KEY_PACE_MS - (now - lastKeySentMs));
-    }
-
     // Queue every key immediately, back-to-back: Vista::write() just
     // appends to the library's own outbound ring buffer, and the panel's
     // real poll cycle drains it at native bus speed from there -- same as
@@ -516,7 +509,6 @@ static void handleSerialLine(const String &line) {
     keyPending = true;
     pendingKeys = keys;
     pendingSinceMs = millis();
-    lastKeySentMs = pendingSinceMs;
     return;
   }
 
