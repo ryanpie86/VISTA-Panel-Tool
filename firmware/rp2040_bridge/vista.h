@@ -277,6 +277,20 @@ public:
     void set_rf_addr(uint8_t addr);
     bool get_rf_emulation();
 
+    // Bench diagnostic (VISTA-Panel-Tool): the real outgoing-keypress
+    // announce (addrToBitmask1/2/3 triplet on GP27/Green) only ever fires
+    // from inside rxHandleISR(), gated on detecting a real >9ms low pulse
+    // on Yellow -- a pattern normally produced by the panel's own bus
+    // timing. With no panel connected, whatever edges show up on that
+    // floating line aren't reliably producing that pattern, so there's no
+    // guarantee the announce code ever runs at all -- bench-confirmed: a
+    // scope on GP27 caught nothing across many attempts with the panel
+    // disconnected. This calls the identical write sequence directly,
+    // triggered by the .ino sketch on a plain timer instead of the
+    // Yellow-wire state machine, so GP27 gets exercised on a predictable
+    // schedule regardless of whether a panel is present at all.
+    void debugForceKeyAnnounce();
+
     // std::queue<struct cmdQueueItem> cmdQueue;
 
 private:
