@@ -51,7 +51,17 @@
 // ---- Pin configuration -------------------------------------------------
 // See HARDWARE_ARCHITECTURE.md "Bus coprocessor: RP2040-Zero" pin table.
 static const int PIN_YELLOW_RX = 26;  // Yellow (panel "data out") -> 39k/10k divider -> GP26
-static const int PIN_GREEN_TX = 27;   // GP27 -> 1k base resistor -> 2N2222 -> Green ("data in from keypad")
+// Green TX was originally GP27, per HARDWARE_ARCHITECTURE.md's pin table --
+// moved to GP1 after bench testing (debugForceKeyAnnounce() + scope) showed
+// GP27 never produces a signal even fully isolated from the 1k/Q1 base
+// circuit (R_B lifted), while the identical forced-announce burst comes out
+// clean and correctly shaped on GP1. That isolates the fault to GP27's GPIO
+// driver on this specific RP2040, not the firmware, the ECP library, or the
+// transistor/divider wiring. GP1 was free (see HARDWARE_ARCHITECTURE.md --
+// originally earmarked for an abandoned UART0 interconnect plan, never
+// wired to anything). Physical wiring must move the 1k base resistor's
+// input lead from GP27 to GP1 to match.
+static const int PIN_GREEN_TX = 1;    // GP1 -> 1k base resistor -> 2N2222 -> Green ("data in from keypad")
 static const int PIN_GREEN_MON = 28;  // Green bus-monitor tap -> 33k/10k divider -> GP28
 static const int PIN_STATUS_LED = 16; // Onboard WS2812, hardwired -- nothing to wire
 
@@ -195,8 +205,8 @@ static uint32_t rxOverflowCount = 0;
 // Bench diagnostic: fires Vista::debugForceKeyAnnounce() on a plain timer,
 // completely independent of the real ACK-slot mechanism (which only
 // triggers from detecting a real panel-driven low pulse on Yellow -- see
-// that method's declaration in vista.h). Lets GP27 be exercised
-// predictably for scope probing with no panel connected at all.
+// that method's declaration in vista.h). Lets the Green TX pin (PIN_GREEN_TX)
+// be exercised predictably for scope probing with no panel connected at all.
 static const unsigned long DEBUG_FORCE_ANNOUNCE_INTERVAL_MS = 1000;
 static unsigned long lastForceAnnounceMs = 0;
 
@@ -222,7 +232,7 @@ void loop() {
 
   if (millis() - lastForceAnnounceMs > DEBUG_FORCE_ANNOUNCE_INTERVAL_MS) {
     vista.debugForceKeyAnnounce();
-    sendLine("DEBUG,forced GP27 announce (address " + String(KEYPAD_ADDR) + ") at t=" + String(millis()));
+    sendLine("DEBUG,forced Green TX announce (address " + String(KEYPAD_ADDR) + ") at t=" + String(millis()));
     lastForceAnnounceMs = millis();
   }
 

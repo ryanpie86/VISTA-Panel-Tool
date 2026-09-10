@@ -4,7 +4,7 @@ The RP2040 owns everything time-critical on the ECP bus (bit-level pulse
 timing, per-device address slots, framing) -- adapted from the
 interrupt-driven ECP library in `Dilbert66/esphome-vistaECP` (that project
 only documents ESP8266/ESP32 pin assignments; this build's own Waveshare
-RP2040-Zero pinout is finalized separately -- Yellow=GP26, Green=GP27,
+RP2040-Zero pinout is finalized separately -- Yellow=GP26, Green=GP1,
 Green bus-monitor tap=GP28 (Yellow=panel "data out", Green=keypad "data
 in", per the Vista-20P's own technician manual, using the same
 non-isolated resistor-divider + transistor bus-interface circuit as

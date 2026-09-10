@@ -278,17 +278,25 @@ public:
     bool get_rf_emulation();
 
     // Bench diagnostic (VISTA-Panel-Tool): the real outgoing-keypress
-    // announce (addrToBitmask1/2/3 triplet on GP27/Green) only ever fires
-    // from inside rxHandleISR(), gated on detecting a real >9ms low pulse
-    // on Yellow -- a pattern normally produced by the panel's own bus
+    // announce (addrToBitmask1/2/3 triplet on the Green TX pin) only ever
+    // fires from inside rxHandleISR(), gated on detecting a real >9ms low
+    // pulse on Yellow -- a pattern normally produced by the panel's own bus
     // timing. With no panel connected, whatever edges show up on that
     // floating line aren't reliably producing that pattern, so there's no
-    // guarantee the announce code ever runs at all -- bench-confirmed: a
-    // scope on GP27 caught nothing across many attempts with the panel
-    // disconnected. This calls the identical write sequence directly,
-    // triggered by the .ino sketch on a plain timer instead of the
-    // Yellow-wire state machine, so GP27 gets exercised on a predictable
-    // schedule regardless of whether a panel is present at all.
+    // guarantee the announce code ever runs at all. This calls the
+    // identical write sequence directly, triggered by the .ino sketch on a
+    // plain timer instead of the Yellow-wire state machine, so Green TX
+    // gets exercised on a predictable schedule regardless of whether a
+    // panel is present at all.
+    //
+    // This diagnostic is what found the actual root cause of "nothing
+    // happens" on the bench: with the panel disconnected and Green TX
+    // isolated from the base-drive transistor, a scope caught nothing at
+    // all on GP27 (the pin originally assigned to this signal) across many
+    // forced-announce attempts, but caught a clean, correctly bit-shaped
+    // burst on GP1 with the identical firmware -- pointing to a dead GP27
+    // GPIO driver, not a protocol or timing bug. Green TX now lives on GP1
+    // (see HARDWARE_ARCHITECTURE.md's pin table).
     void debugForceKeyAnnounce();
 
     // std::queue<struct cmdQueueItem> cmdQueue;
