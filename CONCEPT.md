@@ -394,10 +394,11 @@ Carried forward from earlier discussion, still unresolved:
   UART stopped saving anything and just added a second connection. See
   HARDWARE_ARCHITECTURE.md "RP2040-Zero <-> Pi interconnect".
 - **RP2040-Zero / ECP interface pin mapping**: finalized against the
-  board's actual pinout diagram (Yellow=GP26, Green=GP27, Green
+  board's actual pinout diagram (Yellow=GP26, Green=GP1, Green
   bus-monitor tap=GP28, WS2812 LED fixed on GP16), resolving the old
-  GPIO_26 dual-assignment conflict. See HARDWARE_ARCHITECTURE.md "Bus
-  coprocessor: RP2040-Zero".
+  GPIO_26 dual-assignment conflict. Green TX was originally GP27, moved to
+  GP1 after bench testing found GP27's GPIO driver dead on this chip. See
+  HARDWARE_ARCHITECTURE.md "Bus coprocessor: RP2040-Zero".
 - **Yellow/Green wire roles**: settled by the Vista-20P's own technician
   manual — Yellow is "data out" (panel→keypad), Green is "data in from
   keypad" (keypad→panel), matching this doc's original assumption. A

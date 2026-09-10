@@ -117,13 +117,13 @@ ADC-capable pins (GP26-29) are broken out on this board, resolving the
 | Signal | Pin | Notes |
 |---|---|---|
 | Yellow (panel TX → RP2040 RX, through the 39K/10K divider) | **GP26** (ADC0) | Digital input mode. **Confirmed via the Vista-20P technician manual** — see "Still open" item 1: this doc briefly had Yellow/Green swapped based on a bench observation that turned out to be a correlation error, corrected back once the manual settled it |
-| Green (RP2040 TX → panel, drives the NPN base) | **GP27** (ADC1) | Digital output — resolves the old GPIO_26 dual-assignment conflict. Base transistor: 2N2222, 1kΩ base resistor (see "Still open" item 1 for the sizing) |
+| Green (RP2040 TX → panel, drives the NPN base) | **GP1** | Digital output. Originally GP27 (ADC1) — moved after bench testing found GP27's GPIO driver dead on this chip: with GP27 fully isolated from the base circuit (1kΩ resistor lifted) and a firmware-forced, panel-independent announce burst (`Vista::debugForceKeyAnnounce()`) firing every second, an oscilloscope showed nothing but noise on GP27, while the identical burst came out clean and correctly bit-shaped on GP1 with no other change. GP1 was already free (see below). Base transistor: 2N2222, 1kΩ base resistor (see "Still open" item 1 for the sizing) |
 | Green bus-monitor tap (separate divider, per esphome-vistaECP's `MONITORTX` feature) | **GP28** (ADC2) | Digital input — passively decodes *other* devices' traffic on Green (other keypads, zone expanders, RF receiver modules) that the RP2040 wouldn't otherwise see; not collision detection on the RP2040's own TX. Feeds the future "Wireless (RF) zone visibility" / datalogger-role work in `CONCEPT.md`, not required for near-term ECP read/write |
 | Status LED (WS2812) | **GP16**, internal | Hardwired on-board, not a header pin — nothing to wire |
 
-GP0/GP1 (originally earmarked for UART0) are unused now that the Pi
-interconnect is USB-serial again — see "RP2040-Zero <-> Pi interconnect"
-below.
+GP0 (originally earmarked for UART0 alongside GP1) is unused now that the
+Pi interconnect is USB-serial again — see "RP2040-Zero <-> Pi interconnect"
+below. GP1 itself was reassigned to Green TX per the row above.
 
 ## RP2040-Zero <-> Pi interconnect: USB-serial (reverted from UART)
 
@@ -325,6 +325,11 @@ Vista panel keypad bus (4-wire ECP)
    self-collision detection. See "Bus coprocessor: RP2040-Zero" above for
    the full pin table. (Yellow/Green wire-role assignment went through a
    wrong turn and back — see "Still open" item 1 for the full story.)
+
+   **Update (Green TX moved off GP27):** bench testing later found GP27's
+   GPIO driver dead on this specific chip — see the current pin table above,
+   which now assigns Green TX to GP1 instead. Everything else in this entry
+   (Yellow=GP26, bus-monitor tap=GP28, GP0 unused) still stands.
 
 ## Still open
 
