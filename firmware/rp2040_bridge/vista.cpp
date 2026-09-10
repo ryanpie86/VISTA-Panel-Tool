@@ -1053,6 +1053,27 @@ void Vista::write(const char key)
   write(key, _kpAddr);
 }
 
+// Bench diagnostic -- see declaration in vista.h for why this exists.
+// Identical write sequence to rxHandleISR()'s real ACK-slot announce
+// (same addrToBitmask1/2/3 triplet, same our own address, same
+// vistaSerial->write(..., false, 4800) calls), just invoked directly from
+// the main thread on a timer instead of gated behind detecting a real
+// panel-driven low pulse on Yellow. vistaSerial->write() disables/restores
+// interrupts itself per byte, same as it does when called from the ISR,
+// so this is safe to call from ordinary loop() context.
+void Vista::debugForceKeyAnnounce()
+{
+  if (vistaSerial == NULL)
+    return;
+  vistaSerial->write(addrToBitmask1(_kpAddr), false, 4800);
+  char b = addrToBitmask2(_kpAddr);
+  if (b)
+    vistaSerial->write(b, false, 4800);
+  b = addrToBitmask3(_kpAddr);
+  if (b)
+    vistaSerial->write(b, false, 4800);
+}
+
 void Vista::write(const char *receivedKeys)
 {
   

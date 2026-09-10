@@ -194,6 +194,14 @@ static uint32_t cntF0 = 0, cntF7Seen = 0, cntF7Valid = 0, cntF6 = 0, cntF9 = 0,
 // up as exactly the kind of mid-frame truncation seen on long F7 reads.
 static uint32_t rxOverflowCount = 0;
 
+// Bench diagnostic: fires Vista::debugForceKeyAnnounce() on a plain timer,
+// completely independent of the real ACK-slot mechanism (which only
+// triggers from detecting a real panel-driven low pulse on Yellow -- see
+// that method's declaration in vista.h). Lets GP27 be exercised
+// predictably for scope probing with no panel connected at all.
+static const unsigned long DEBUG_FORCE_ANNOUNCE_INTERVAL_MS = 1000;
+static unsigned long lastForceAnnounceMs = 0;
+
 void loop() {
   static unsigned long lastHeartbeatMs = 0;
   if (millis() - lastHeartbeatMs > 2000) {
@@ -212,6 +220,12 @@ void loop() {
                     " F2=" + String(cntF2) + " F8=" + String(cntF8) +
                     " FB=" + String(cntFB) + " other=" + String(cntOther));
     lastHeartbeatMs = millis();
+  }
+
+  if (millis() - lastForceAnnounceMs > DEBUG_FORCE_ANNOUNCE_INTERVAL_MS) {
+    vista.debugForceKeyAnnounce();
+    sendLine("DEBUG,forced GP27 announce (address " + String(KEYPAD_ADDR) + ") at t=" + String(millis()));
+    lastForceAnnounceMs = millis();
   }
 
   if (vista.rxOverflow()) rxOverflowCount++;
