@@ -433,6 +433,42 @@ Vista panel keypad bus (4-wire ECP)
      the correct lines, rather than assembling straight from the paper
      design. The clean full-scale captures on both lines, now correctly
      attributed, are done.
+
+   **Update (missing RP2040 <-> panel ground reference found, and a new
+   hardware fix needed):** with GP27 replaced by GP1 (see the pin-mapping
+   entry above) and a clean, correctly-shaped signal confirmed at GP1 and
+   at Q1's base, the panel still never invited address 16. Root cause:
+   the RP2040's GND was never tied to the panel's own GND -- Q1's emitter
+   sits on RP2040 GND (see BOM entry above), so without a shared ground
+   reference, Q1 pulling Green "low" was only ever low relative to a
+   floating local ground, never a valid transition from the panel's own
+   point of view. Yellow RX still worked throughout this whole
+   investigation despite the same missing reference, because the panel
+   drives Yellow hard (13.8V through a resistor divider) with enough
+   margin to tolerate it; Green TX, a low-margin current-sink signal, had
+   none.
+
+   Wiring the panel's GND directly to the RP2040's GND surfaced a second,
+   more serious problem: with a ground reference for current to complete
+   the loop, the panel bus's ~13.8V idle level backfeeds through Q1's
+   collector-base junction and up the base resistor into GP1 -- confirmed
+   by the RP2040's status LED pulsing with USB completely unplugged,
+   powered by leakage current alone through GP1's GPIO protection diode
+   into the 3.3V rail. This likely also explains a real keypad (address
+   17) locking up solid while the RP2040's Green wire was connected: a
+   floating/backfed base can leave Q1 never fully OFF, holding Green
+   pulled down against the shared bus far more persistently than any
+   firmware timing issue would. **Fix (not yet applied in hardware): add
+   a small series diode (e.g. 1N4148) between the 1kΩ base resistor and
+   Q1's base**, oriented to pass drive current from GP1 into the base but
+   block reverse current from the collector (Green) side from ever
+   reaching GP1. Do not reconnect Green to a live bus with other real
+   devices present until this is in place. Separately, the bench-only
+   forced-announce timer (`VISTA_DEBUG_FORCE_ANNOUNCE` in
+   `rp2040_bridge.ino`) is now gated off by default for the same
+   live-bus-safety reason: it fires unconditionally once a second with no
+   regard for the panel's own poll timing, unsafe with any other device
+   sharing the bus.
 2. **Battery capacity** — deliberately left undecided, and not needed
    during the development/testing phase — the build will run on isolated
    wall power (via the isolated USB-C/DC-DC charge path already in the

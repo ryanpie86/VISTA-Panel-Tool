@@ -207,8 +207,18 @@ static uint32_t rxOverflowCount = 0;
 // triggers from detecting a real panel-driven low pulse on Yellow -- see
 // that method's declaration in vista.h). Lets the Green TX pin (PIN_GREEN_TX)
 // be exercised predictably for scope probing with no panel connected at all.
+//
+// GATED OFF BY DEFAULT (VISTA_DEBUG_FORCE_ANNOUNCE, undefined unless a build
+// explicitly sets it): bench-confirmed unsafe on a live bus with other real
+// devices present -- it fires unconditionally once a second with no regard
+// for the panel's own ACK-slot/poll timing, which locked up a real keypad
+// (address 17) solid until the RP2040's Green wire was disconnected. Only
+// enable this for isolated single-device bench testing, never with a real
+// panel/keypad sharing the same bus.
+#ifdef VISTA_DEBUG_FORCE_ANNOUNCE
 static const unsigned long DEBUG_FORCE_ANNOUNCE_INTERVAL_MS = 1000;
 static unsigned long lastForceAnnounceMs = 0;
+#endif
 
 void loop() {
   static unsigned long lastHeartbeatMs = 0;
@@ -230,11 +240,13 @@ void loop() {
     lastHeartbeatMs = millis();
   }
 
+#ifdef VISTA_DEBUG_FORCE_ANNOUNCE
   if (millis() - lastForceAnnounceMs > DEBUG_FORCE_ANNOUNCE_INTERVAL_MS) {
     vista.debugForceKeyAnnounce();
     sendLine("DEBUG,forced Green TX announce (address " + String(KEYPAD_ADDR) + ") at t=" + String(millis()));
     lastForceAnnounceMs = millis();
   }
+#endif
 
   if (vista.rxOverflow()) rxOverflowCount++;
 
