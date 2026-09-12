@@ -127,7 +127,9 @@ below. GP1 itself was reassigned to Green TX per the row above.
 
 ### Green TX interface schematic (current + required fix)
 
-![Green TX interface schematic: RP2040-Zero board silhouette (pin layout matching the Waveshare pinout reference photo) with GP1 driving R_B, D1 (not yet installed), and Q1's base; Q1's collector to Green; Q1's emitter and the RP2040's GND tied to Panel GND via a dedicated wire](docs/hardware/green-tx-schematic.svg)
+![Green TX interface schematic: RP2040-Zero board silhouette (pin layout matching the Waveshare pinout reference photo) with GP1 driving R_B, D1 (not yet installed), and Q1's base; Q1's collector to Green; Q1's emitter and the RP2040's GND tied to Panel GND via a dedicated wire](docs/hardware/green-tx-schematic.jpg)
+
+(Source vector version: `docs/hardware/green-tx-schematic.svg`, same content.)
 
 Board silhouette and pin positions (GND/GP1 on the top board, GP26/GP27/
 GP28 further down the left column) match the Waveshare RP2040-Zero's own
