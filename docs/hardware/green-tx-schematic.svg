@@ -92,10 +92,10 @@
     <text x="335" y="108" text-anchor="start" fill="#888">GP0</text>
 
     <!-- GP1 (Green TX, highlighted) -->
-    <circle cx="280" cy="150" r="6.5" fill="#1e7d32" stroke="#123f19" stroke-width="1.8"/>
-    <line x1="285" y1="150" x2="380" y2="150" stroke="#1e7d32" stroke-width="3"/>
-    <text x="335" y="140" text-anchor="start" fill="#1e7d32" font-weight="bold" font-size="15">GP1</text>
-    <text x="335" y="158" text-anchor="start" fill="#1e7d32" font-size="11">(Green TX)</text>
+    <circle cx="280" cy="150" r="6.5" fill="#222" stroke="#000" stroke-width="1.8"/>
+    <line x1="285" y1="150" x2="380" y2="150" stroke="#222" stroke-width="3"/>
+    <text x="335" y="140" text-anchor="start" fill="#111" font-weight="bold" font-size="15">GP1</text>
+    <text x="335" y="158" text-anchor="start" fill="#333" font-size="11">(Green TX)</text>
 
     <!-- GP2..GP13 condensed -->
     <circle cx="280" cy="188" r="5" fill="#cfcfcf" stroke="#666"/>
@@ -112,7 +112,7 @@
 
   <!-- ================= External transistor stage ================= -->
   <!-- GP1 wire down to R_B -->
-  <line x1="380" y1="150" x2="450" y2="150" stroke="#1e7d32" stroke-width="3" marker-end="url(#arrowGreen)"/>
+  <line x1="380" y1="150" x2="450" y2="150" stroke="#222" stroke-width="3" marker-end="url(#arrow)"/>
 
   <!-- R_B resistor (zigzag) -->
   <g stroke="#222" stroke-width="2" fill="none">
@@ -122,23 +122,22 @@
   <text x="478" y="106" font-size="11" text-anchor="middle" fill="#555">1k&#937;</text>
 
   <!-- wire from R_B to D1 -->
-  <line x1="508" y1="150" x2="560" y2="150" stroke="#c0392b" stroke-width="2.5" stroke-dasharray="6,4" marker-end="url(#arrowRed)"/>
+  <line x1="508" y1="150" x2="560" y2="150" stroke="#222" stroke-width="2.5" marker-end="url(#arrow)"/>
 
-  <!-- D1 diode symbol (dashed red = not yet installed) -->
-  <g stroke="#c0392b" stroke-width="2.5" fill="none" stroke-dasharray="6,4">
+  <!-- D1 diode symbol (installed, part of the final circuit) -->
+  <g stroke="#222" stroke-width="2.5" fill="none">
     <polygon points="560,138 560,162 590,150"/>
     <line x1="590" y1="138" x2="590" y2="162"/>
   </g>
-  <text x="575" y="118" font-size="12" text-anchor="middle" fill="#c0392b" font-weight="bold">D1 -- 1N4148</text>
-  <text x="575" y="102" font-size="11" text-anchor="middle" fill="#c0392b">NOT YET INSTALLED</text>
-  <text x="575" y="190" font-size="10.5" text-anchor="middle" fill="#8a2f24" width="150">
+  <text x="575" y="118" font-size="12" text-anchor="middle" fill="#222" font-weight="bold">D1 -- 1N4148</text>
+  <text x="575" y="190" font-size="10.5" text-anchor="middle" fill="#555" width="150">
     <tspan x="575" dy="0">blocks Green's ~13.8V idle-high</tspan>
     <tspan x="575" dy="13">from backfeeding into GP1 via its</tspan>
     <tspan x="575" dy="13">own GPIO ESD protection diode</tspan>
   </text>
 
   <!-- wire from D1 to Q1 base -->
-  <line x1="605" y1="150" x2="660" y2="150" stroke="#c0392b" stroke-width="2.5" stroke-dasharray="6,4" marker-end="url(#arrowRed)"/>
+  <line x1="605" y1="150" x2="660" y2="150" stroke="#222" stroke-width="2.5" marker-end="url(#arrow)"/>
 
   <!-- Q1 transistor (NPN) -->
   <g stroke="#222" stroke-width="2" fill="none">
@@ -176,9 +175,8 @@
   <text x="450" y="300" font-size="11" text-anchor="middle" fill="#1e7d32">RP2040 GND</text>
 
   <!-- dedicated GND wire out to Panel GND -->
-  <line x1="450" y1="345" x2="720" y2="345" stroke="#1e7d32" stroke-width="3" stroke-dasharray="9,5" marker-end="url(#arrowGreen)"/>
+  <line x1="450" y1="345" x2="720" y2="345" stroke="#1e7d32" stroke-width="3" marker-end="url(#arrowGreen)"/>
   <text x="585" y="335" font-size="11.5" text-anchor="middle" fill="#1e7d32" font-weight="bold">dedicated GND wire</text>
-  <text x="585" y="368" font-size="10.5" text-anchor="middle" fill="#1e7d32">(bench-confirmed required)</text>
   <rect x="725" y="327" width="150" height="36" rx="6" fill="#eafbea" stroke="#1e7d32" stroke-width="1.5"/>
   <text x="800" y="350" font-size="14" text-anchor="middle" fill="#1e7d32" font-weight="bold">Panel GND</text>
 
@@ -186,17 +184,14 @@
   <g font-size="12.5">
     <text x="60" y="580" font-weight="bold" fill="#111">Legend</text>
 
-    <line x1="60" y1="596" x2="100" y2="596" stroke="#222" stroke-width="2.5"/>
-    <text x="108" y="600" fill="#222">Existing wiring (installed, working)</text>
+    <line x1="60" y1="600" x2="100" y2="600" stroke="#222" stroke-width="2.5"/>
+    <text x="108" y="604" fill="#222">Signal path (RP2040 to Green bus)</text>
 
-    <line x1="60" y1="616" x2="100" y2="616" stroke="#1e7d32" stroke-width="3" stroke-dasharray="9,5"/>
-    <text x="108" y="620" fill="#1e7d32">New wiring, bench-confirmed required (installed)</text>
+    <line x1="380" y1="600" x2="420" y2="600" stroke="#1e7d32" stroke-width="3"/>
+    <text x="428" y="604" fill="#1e7d32">Ground network (RP2040 GND to Panel GND)</text>
 
-    <line x1="500" y1="596" x2="540" y2="596" stroke="#c0392b" stroke-width="2.5" stroke-dasharray="6,4"/>
-    <text x="548" y="600" fill="#c0392b">Required fix, NOT YET installed (D1)</text>
-
-    <circle cx="520" cy="616" r="5" fill="#cfcfcf" stroke="#666"/>
-    <text x="548" y="620" fill="#777">Unused / not part of this circuit</text>
+    <circle cx="800" cy="600" r="5" fill="#cfcfcf" stroke="#666"/>
+    <text x="815" y="604" fill="#777">Unused / not part of this circuit</text>
   </g>
   </g>
 </svg>
