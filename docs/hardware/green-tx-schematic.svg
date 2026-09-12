@@ -1,0 +1,202 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1300 640" font-family="Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#222"/>
+    </marker>
+    <marker id="arrowRed" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#c0392b"/>
+    </marker>
+    <marker id="arrowGreen" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#1e7d32"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1300" height="640" fill="#ffffff"/>
+
+  <!-- Title -->
+  <text x="20" y="30" font-size="20" font-weight="bold" fill="#111">Green TX interface -- RP2040-Zero to ECP bus</text>
+  <text x="20" y="50" font-size="13" fill="#555">Board silhouette/pin layout matches the Waveshare RP2040-Zero pinout reference photo</text>
+
+  <g transform="translate(120,0)">
+  <!-- ================= RP2040-Zero board ================= -->
+  <g>
+    <rect x="60" y="90" width="220" height="430" rx="18" fill="#173d73" stroke="#0d2648" stroke-width="2"/>
+    <!-- USB-C connector -->
+    <rect x="140" y="90" width="60" height="26" rx="6" fill="#c7ccd1" stroke="#8a9096" stroke-width="1.5"/>
+    <text x="170" y="82" font-size="11" text-anchor="middle" fill="#333">USB-C</text>
+    <!-- Waveshare label / chip -->
+    <text x="170" y="150" font-size="12" text-anchor="middle" fill="#dfe8f7" font-weight="bold">RP2040-Zero</text>
+    <rect x="130" y="230" width="80" height="80" rx="6" fill="#0d2648"/>
+    <text x="170" y="274" font-size="10" text-anchor="middle" fill="#7fa0d8">RP2040</text>
+    <!-- BOOT / RESET buttons -->
+    <circle cx="95" cy="330" r="9" fill="#e9e9e9" stroke="#888"/>
+    <text x="95" y="352" font-size="9" text-anchor="middle" fill="#dfe8f7">BOOT</text>
+    <circle cx="245" cy="330" r="9" fill="#e9e9e9" stroke="#888"/>
+    <text x="245" y="352" font-size="9" text-anchor="middle" fill="#dfe8f7">RESET</text>
+  </g>
+
+  <!-- Left column pins (top-to-bottom: 5V, GND, 3V3, GP29, GP28, GP27, GP26, GP15, GP14) -->
+  <!-- pins at x=60, rows every 38px starting y=110 -->
+  <g font-size="13">
+    <!-- 5V -->
+    <circle cx="60" cy="112" r="5" fill="#cfcfcf" stroke="#666"/>
+    <line x1="0" y1="112" x2="55" y2="112" stroke="#888" stroke-width="1.5"/>
+    <text x="0" y="108" text-anchor="start" fill="#888">5V</text>
+
+    <!-- GND (used) -->
+    <circle cx="60" cy="150" r="6" fill="#1e7d32" stroke="#123f19" stroke-width="1.5"/>
+    <line x1="-10" y1="150" x2="55" y2="150" stroke="#1e7d32" stroke-width="2.5"/>
+    <text x="-10" y="145" text-anchor="start" fill="#1e7d32" font-weight="bold">GND</text>
+
+    <!-- 3V3 -->
+    <circle cx="60" cy="188" r="5" fill="#cfcfcf" stroke="#666"/>
+    <line x1="0" y1="188" x2="55" y2="188" stroke="#888" stroke-width="1.5"/>
+    <text x="0" y="184" text-anchor="start" fill="#888">3V3</text>
+
+    <!-- GP29 -->
+    <circle cx="60" cy="226" r="5" fill="#cfcfcf" stroke="#666"/>
+    <line x1="0" y1="226" x2="55" y2="226" stroke="#888" stroke-width="1.5"/>
+    <text x="0" y="222" text-anchor="start" fill="#888">GP29</text>
+
+    <!-- GP28 (Green bus-monitor tap) -->
+    <circle cx="60" cy="264" r="5.5" fill="#2a6fb0" stroke="#123a5c" stroke-width="1.5"/>
+    <line x1="-70" y1="264" x2="55" y2="264" stroke="#2a6fb0" stroke-width="2"/>
+    <text x="-70" y="260" text-anchor="start" fill="#2a6fb0">GP28 (Green monitor tap)</text>
+
+    <!-- GP27 (dead pin, unused) -->
+    <circle cx="60" cy="302" r="5" fill="#cfcfcf" stroke="#666"/>
+    <line x1="-42" y1="302" x2="55" y2="302" stroke="#999" stroke-width="1.5" stroke-dasharray="3,3"/>
+    <text x="-42" y="298" text-anchor="start" fill="#999">GP27 (dead, unused)</text>
+
+    <!-- GP26 (Yellow RX) -->
+    <circle cx="60" cy="340" r="5.5" fill="#c8952a" stroke="#7a5a15" stroke-width="1.5"/>
+    <line x1="-58" y1="340" x2="55" y2="340" stroke="#c8952a" stroke-width="2"/>
+    <text x="-58" y="336" text-anchor="start" fill="#a3781f">GP26 (Yellow RX)</text>
+
+    <!-- GP15 -->
+    <circle cx="60" cy="378" r="5" fill="#cfcfcf" stroke="#666"/>
+    <line x1="0" y1="378" x2="55" y2="378" stroke="#888" stroke-width="1.5"/>
+    <text x="0" y="374" text-anchor="start" fill="#888">GP15</text>
+
+    <!-- GP14 -->
+    <circle cx="60" cy="416" r="5" fill="#cfcfcf" stroke="#666"/>
+    <line x1="0" y1="416" x2="55" y2="416" stroke="#888" stroke-width="1.5"/>
+    <text x="0" y="412" text-anchor="start" fill="#888">GP14</text>
+  </g>
+
+  <!-- Right column pins (top-to-bottom: GP0, GP1, GP2...GP13 condensed) -->
+  <g font-size="13">
+    <!-- GP0 -->
+    <circle cx="280" cy="112" r="5" fill="#cfcfcf" stroke="#666"/>
+    <line x1="285" y1="112" x2="330" y2="112" stroke="#888" stroke-width="1.5"/>
+    <text x="335" y="108" text-anchor="start" fill="#888">GP0</text>
+
+    <!-- GP1 (Green TX, highlighted) -->
+    <circle cx="280" cy="150" r="6.5" fill="#1e7d32" stroke="#123f19" stroke-width="1.8"/>
+    <line x1="285" y1="150" x2="380" y2="150" stroke="#1e7d32" stroke-width="3"/>
+    <text x="335" y="140" text-anchor="start" fill="#1e7d32" font-weight="bold" font-size="15">GP1</text>
+    <text x="335" y="158" text-anchor="start" fill="#1e7d32" font-size="11">(Green TX)</text>
+
+    <!-- GP2..GP13 condensed -->
+    <circle cx="280" cy="188" r="5" fill="#cfcfcf" stroke="#666"/>
+    <line x1="285" y1="188" x2="330" y2="188" stroke="#888" stroke-width="1.5"/>
+    <text x="335" y="192" text-anchor="start" fill="#999" font-size="12">GP2 - GP13 (unused)</text>
+  </g>
+
+  <!-- Underside GND note -->
+  <text x="60" y="536" font-size="11" fill="#777" text-anchor="start" width="220">
+    <tspan x="60" dy="0">Board also breaks out a second GND pad</tspan>
+    <tspan x="60" dy="14">on its underside pin group -- same net,</tspan>
+    <tspan x="60" dy="14">either GND works for the panel tie.</tspan>
+  </text>
+
+  <!-- ================= External transistor stage ================= -->
+  <!-- GP1 wire down to R_B -->
+  <line x1="380" y1="150" x2="450" y2="150" stroke="#1e7d32" stroke-width="3" marker-end="url(#arrowGreen)"/>
+
+  <!-- R_B resistor (zigzag) -->
+  <g stroke="#222" stroke-width="2" fill="none">
+    <polyline points="450,150 458,138 468,162 478,138 488,162 498,138 508,150"/>
+  </g>
+  <text x="478" y="122" font-size="12" text-anchor="middle" fill="#222" font-weight="bold">R_B</text>
+  <text x="478" y="106" font-size="11" text-anchor="middle" fill="#555">1k&#937;</text>
+
+  <!-- wire from R_B to D1 -->
+  <line x1="508" y1="150" x2="560" y2="150" stroke="#c0392b" stroke-width="2.5" stroke-dasharray="6,4" marker-end="url(#arrowRed)"/>
+
+  <!-- D1 diode symbol (dashed red = not yet installed) -->
+  <g stroke="#c0392b" stroke-width="2.5" fill="none" stroke-dasharray="6,4">
+    <polygon points="560,138 560,162 590,150"/>
+    <line x1="590" y1="138" x2="590" y2="162"/>
+  </g>
+  <text x="575" y="118" font-size="12" text-anchor="middle" fill="#c0392b" font-weight="bold">D1 -- 1N4148</text>
+  <text x="575" y="102" font-size="11" text-anchor="middle" fill="#c0392b">NOT YET INSTALLED</text>
+  <text x="575" y="190" font-size="10.5" text-anchor="middle" fill="#8a2f24" width="150">
+    <tspan x="575" dy="0">blocks Green's ~13.8V idle-high</tspan>
+    <tspan x="575" dy="13">from backfeeding into GP1 via its</tspan>
+    <tspan x="575" dy="13">own GPIO ESD protection diode</tspan>
+  </text>
+
+  <!-- wire from D1 to Q1 base -->
+  <line x1="605" y1="150" x2="660" y2="150" stroke="#c0392b" stroke-width="2.5" stroke-dasharray="6,4" marker-end="url(#arrowRed)"/>
+
+  <!-- Q1 transistor (NPN) -->
+  <g stroke="#222" stroke-width="2" fill="none">
+    <line x1="660" y1="150" x2="690" y2="150"/>
+    <line x1="690" y1="120" x2="690" y2="180"/>
+    <line x1="690" y1="132" x2="720" y2="105"/>
+    <line x1="690" y1="168" x2="720" y2="195"/>
+    <polygon points="712,190 720,195 715,183" fill="#222" stroke="none"/>
+  </g>
+  <text x="700" y="145" font-size="12" fill="#222" font-weight="bold">Q1</text>
+  <text x="700" y="70" font-size="12" text-anchor="middle" fill="#222" font-weight="bold">2N2222</text>
+  <text x="722" y="100" font-size="11" fill="#555">collector</text>
+  <text x="722" y="210" font-size="11" fill="#555">emitter</text>
+  <text x="655" y="140" font-size="10.5" fill="#555" text-anchor="end">base</text>
+
+  <!-- collector wire up to Green (ECP bus) -->
+  <line x1="720" y1="105" x2="720" y2="70" stroke="#222" stroke-width="2.5"/>
+  <line x1="720" y1="70" x2="960" y2="70" stroke="#222" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <rect x="965" y="52" width="150" height="36" rx="6" fill="#eafbea" stroke="#1e7d32" stroke-width="1.5"/>
+  <text x="1040" y="75" font-size="14" text-anchor="middle" fill="#1e7d32" font-weight="bold">Green (ECP bus)</text>
+
+  <!-- emitter wire down to a ground node -->
+  <line x1="720" y1="195" x2="720" y2="260" stroke="#222" stroke-width="2.5"/>
+  <line x1="720" y1="260" x2="450" y2="260" stroke="#222" stroke-width="2.5"/>
+  <line x1="450" y1="260" x2="450" y2="150" stroke="#222" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <text x="585" y="278" font-size="11.5" text-anchor="middle" fill="#555">Q1 emitter -&gt; RP2040 GND</text>
+
+  <!-- Ground symbol at the node, dropping to Panel GND -->
+  <line x1="450" y1="260" x2="450" y2="330" stroke="#1e7d32" stroke-width="3"/>
+  <g stroke="#1e7d32" stroke-width="3">
+    <line x1="430" y1="330" x2="470" y2="330"/>
+    <line x1="438" y1="340" x2="462" y2="340"/>
+    <line x1="446" y1="350" x2="454" y2="350"/>
+  </g>
+  <text x="450" y="300" font-size="11" text-anchor="middle" fill="#1e7d32">RP2040 GND</text>
+
+  <!-- dedicated GND wire out to Panel GND -->
+  <line x1="450" y1="345" x2="720" y2="345" stroke="#1e7d32" stroke-width="3" stroke-dasharray="9,5" marker-end="url(#arrowGreen)"/>
+  <text x="585" y="335" font-size="11.5" text-anchor="middle" fill="#1e7d32" font-weight="bold">dedicated GND wire</text>
+  <text x="585" y="368" font-size="10.5" text-anchor="middle" fill="#1e7d32">(bench-confirmed required)</text>
+  <rect x="725" y="327" width="150" height="36" rx="6" fill="#eafbea" stroke="#1e7d32" stroke-width="1.5"/>
+  <text x="800" y="350" font-size="14" text-anchor="middle" fill="#1e7d32" font-weight="bold">Panel GND</text>
+
+  <!-- ================= Legend ================= -->
+  <g font-size="12.5">
+    <text x="60" y="580" font-weight="bold" fill="#111">Legend</text>
+
+    <line x1="60" y1="596" x2="100" y2="596" stroke="#222" stroke-width="2.5"/>
+    <text x="108" y="600" fill="#222">Existing wiring (installed, working)</text>
+
+    <line x1="60" y1="616" x2="100" y2="616" stroke="#1e7d32" stroke-width="3" stroke-dasharray="9,5"/>
+    <text x="108" y="620" fill="#1e7d32">New wiring, bench-confirmed required (installed)</text>
+
+    <line x1="500" y1="596" x2="540" y2="596" stroke="#c0392b" stroke-width="2.5" stroke-dasharray="6,4"/>
+    <text x="548" y="600" fill="#c0392b">Required fix, NOT YET installed (D1)</text>
+
+    <circle cx="520" cy="616" r="5" fill="#cfcfcf" stroke="#666"/>
+    <text x="548" y="620" fill="#777">Unused / not part of this circuit</text>
+  </g>
+  </g>
+</svg>
