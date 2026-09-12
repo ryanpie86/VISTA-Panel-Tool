@@ -125,6 +125,37 @@ GP0 (originally earmarked for UART0 alongside GP1) is unused now that the
 Pi interconnect is USB-serial again — see "RP2040-Zero <-> Pi interconnect"
 below. GP1 itself was reassigned to Green TX per the row above.
 
+### Green TX interface schematic (current + required fix)
+
+```
+RP2040 GP1 ──[ 1kΩ R_B ]──► D1 (1N4148, NOT YET INSTALLED) ──► Q1 base
+                             blocks Green's ~13.8V idle-high
+                             from backfeeding into GP1 via its
+                             own GPIO ESD protection diode
+
+Q1 (2N2222) collector ─────────────────────────────────────► Green (ECP bus)
+
+Q1 (2N2222) emitter ───────────────────────────────────────► RP2040 GND
+
+RP2040 GND ──[ dedicated GND wire, bench-confirmed required ]──► Panel GND
+```
+
+Two things this diagram makes explicit that the BOM/pin-table prose above
+doesn't show visually:
+- **The RP2040 GND ↔ panel GND wire is load-bearing, not optional.** Q1's
+  emitter references RP2040 GND, not panel GND directly, so missing this
+  wire doesn't just degrade the signal -- it means Green never carries a
+  valid logic level from the panel's point of view at all, while Yellow
+  RX keeps working anyway (enough margin on that side to tolerate a
+  floating reference). See "Still open" item 1's ground-reference update
+  below for the full story of how this was found.
+- **D1 is a required fix, not yet installed in hardware.** Without it,
+  the panel bus's idle-high voltage leaks back through Q1's
+  collector-base junction, up R_B, and into GP1's GPIO protection diode
+  -- confirmed by the RP2040's status LED lighting with USB unplugged,
+  powered by leakage current alone. Do not reconnect Green to a live bus
+  with other real devices present until D1 is installed.
+
 ## RP2040-Zero <-> Pi interconnect: USB-serial (reverted from UART)
 
 **Decided (revisited):** back to a single USB-C cable between the
