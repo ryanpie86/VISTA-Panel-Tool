@@ -125,9 +125,9 @@ GP0 (originally earmarked for UART0 alongside GP1) is unused now that the
 Pi interconnect is USB-serial again — see "RP2040-Zero <-> Pi interconnect"
 below. GP1 itself was reassigned to Green TX per the row above.
 
-### Green TX interface schematic (current + required fix)
+### Green TX interface schematic (complete design)
 
-![Green TX interface schematic: RP2040-Zero board silhouette (pin layout matching the Waveshare pinout reference photo) with GP1 driving R_B, D1 (not yet installed), and Q1's base; Q1's collector to Green; Q1's emitter and the RP2040's GND tied to Panel GND via a dedicated wire](docs/hardware/green-tx-schematic.jpg)
+![Green TX interface schematic: RP2040-Zero board silhouette (pin layout matching the Waveshare pinout reference photo) with GP1 driving R_B, D1, and Q1's base; Q1's collector to Green; Q1's emitter and the RP2040's GND tied to Panel GND via a dedicated wire](docs/hardware/green-tx-schematic.jpg)
 
 (Source vector version: `docs/hardware/green-tx-schematic.svg`, same content.)
 
@@ -145,12 +145,15 @@ doesn't show visually:
   RX keeps working anyway (enough margin on that side to tolerate a
   floating reference). See "Still open" item 1's ground-reference update
   below for the full story of how this was found.
-- **D1 is a required fix, not yet installed in hardware.** Without it,
-  the panel bus's idle-high voltage leaks back through Q1's
-  collector-base junction, up R_B, and into GP1's GPIO protection diode
-  -- confirmed by the RP2040's status LED lighting with USB unplugged,
-  powered by leakage current alone. Do not reconnect Green to a live bus
-  with other real devices present until D1 is installed.
+- **D1 exists to block backfeed, not to pass signal.** Without it, the
+  panel bus's idle-high voltage leaks back through Q1's collector-base
+  junction, up R_B, and into GP1's GPIO protection diode -- confirmed by
+  the RP2040's status LED lighting with USB unplugged, powered by
+  leakage current alone. D1 is now installed and that specific symptom
+  (and the real-keypad-17 bus lockup that came with it) is confirmed
+  resolved; see "Still open" item 1's backfeed update below for what's
+  still being chased (Green itself still isn't producing a signal at
+  Q1's collector, under active bench investigation).
 
 ## RP2040-Zero <-> Pi interconnect: USB-serial (reverted from UART)
 
@@ -485,17 +488,28 @@ Vista panel keypad bus (4-wire ECP)
    17) locking up solid while the RP2040's Green wire was connected: a
    floating/backfed base can leave Q1 never fully OFF, holding Green
    pulled down against the shared bus far more persistently than any
-   firmware timing issue would. **Fix (not yet applied in hardware): add
-   a small series diode (e.g. 1N4148) between the 1kΩ base resistor and
-   Q1's base**, oriented to pass drive current from GP1 into the base but
-   block reverse current from the collector (Green) side from ever
-   reaching GP1. Do not reconnect Green to a live bus with other real
-   devices present until this is in place. Separately, the bench-only
-   forced-announce timer (`VISTA_DEBUG_FORCE_ANNOUNCE` in
+   firmware timing issue would. **Fix: a small series diode (D1, 1N4148)
+   between the 1kΩ base resistor and Q1's base**, oriented to pass drive
+   current from GP1 into the base but block reverse current from the
+   collector (Green) side from ever reaching GP1. Separately, the
+   bench-only forced-announce timer (`VISTA_DEBUG_FORCE_ANNOUNCE` in
    `rp2040_bridge.ino`) is now gated off by default for the same
    live-bus-safety reason: it fires unconditionally once a second with no
    regard for the panel's own poll timing, unsafe with any other device
    sharing the bus.
+
+   **Update (D1 installed, backfeed/lockup resolved, new fault under
+   investigation):** D1 is now installed. The backfeed symptom (RP2040
+   status LED lighting with USB unplugged) and the real-keypad-17 bus
+   lockup are both confirmed resolved -- consistent with the theory above,
+   Q1's base is no longer floating/backfed. However, Green still isn't
+   producing a signal: with the base scoping clean (referenced to RP2040
+   GND) and Q1's collector scoping nothing at the same time, the fault is
+   isolated to Q1 or its immediate wiring, not the base-drive path.
+   Swapping Q1 for a fresh 2N2222 made no difference. Currently rebuilding
+   the R_B/D1/Q1 stage off breadboard (soldered, point-to-point) to rule
+   out a breadboard-induced short or bad contact from a crowded board with
+   a lot of rework on it -- still open.
 2. **Battery capacity** — deliberately left undecided, and not needed
    during the development/testing phase — the build will run on isolated
    wall power (via the isolated USB-C/DC-DC charge path already in the
