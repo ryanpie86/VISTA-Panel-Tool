@@ -127,38 +127,12 @@ below. GP1 itself was reassigned to Green TX per the row above.
 
 ### Green TX interface schematic (current + required fix)
 
-Laid out to match the Waveshare RP2040-Zero's own pinout reference diagram
-(top board, USB-C at top; left/right column order and row positions below
-are the board's real physical layout, not signal-flow order):
+![Green TX interface schematic: RP2040-Zero board silhouette (pin layout matching the Waveshare pinout reference photo) with GP1 driving R_B, D1 (not yet installed), and Q1's base; Q1's collector to Green; Q1's emitter and the RP2040's GND tied to Panel GND via a dedicated wire](docs/hardware/green-tx-schematic.svg)
 
-| Left column (top board) | Right column (top board) |
-|---|---|
-| 5V | GP0 |
-| **GND** — ties to **Panel GND** via a dedicated wire (bench-confirmed required, see below) | **GP1** — Green TX: → 1kΩ R_B → **D1 (1N4148, NOT YET INSTALLED)** → Q1 base |
-| 3V3 | GP2 |
-| GP29 | GP3 |
-| GP28 — Green bus-monitor tap (ADC2) | GP4 |
-| GP27 — dead pin, no longer used (see "Still open" item 1) | GP5 |
-| GP26 — Yellow RX (ADC0) | GP6 |
-| GP15 | GP7 |
-| GP14 | GP8 – GP13 |
-
-The board also breaks GND out again on the underside pin group (bottom
-board in the reference photo, same net as the GND row above) — either GND
-pad works for the panel-GND tie, they're electrically identical.
-
-Continuing off the GP1/GND row above, the external transistor stage:
-
-```
-GP1 ──[ 1kΩ R_B ]──► D1 (1N4148, NOT YET INSTALLED) ──► Q1 (2N2222) base
-                      blocks Green's ~13.8V idle-high
-                      from backfeeding into GP1 via its
-                      own GPIO ESD protection diode
-
-Q1 collector ────────────────────────────────────────► Green (ECP bus)
-
-Q1 emitter ──────────────────────────────────────────► RP2040 GND (row above)
-```
+Board silhouette and pin positions (GND/GP1 on the top board, GP26/GP27/
+GP28 further down the left column) match the Waveshare RP2040-Zero's own
+pinout reference photo. The board also breaks GND out again on its
+underside pin group (same net) — either GND pad works for the panel tie.
 
 Two things this diagram makes explicit that the BOM/pin-table prose above
 doesn't show visually:
