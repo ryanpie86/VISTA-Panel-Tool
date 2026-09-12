@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1300 640" font-family="Helvetica, Arial, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1300 680" font-family="Helvetica, Arial, sans-serif">
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path d="M0,0 L10,5 L0,10 z" fill="#222"/>
@@ -11,7 +11,7 @@
     </marker>
   </defs>
 
-  <rect x="0" y="0" width="1300" height="640" fill="#ffffff"/>
+  <rect x="0" y="0" width="1300" height="680" fill="#ffffff"/>
 
   <!-- Title -->
   <text x="20" y="30" font-size="20" font-weight="bold" fill="#111">Green TX interface -- RP2040-Zero to ECP bus</text>
@@ -43,13 +43,16 @@
     <line x1="0" y1="112" x2="55" y2="112" stroke="#888" stroke-width="1.5"/>
     <text x="0" y="108" text-anchor="start" fill="#888">5V</text>
 
-    <!-- GND (used). Lead jogs down off the GP1 row on purpose, so the
-         two pins' leads aren't drawn collinear across the board (that
-         previously read as a direct GP1-to-GND wire, which is wrong:
-         GND and GP1 are unrelated nets, only their physical board rows
-         happen to line up). -->
+    <!-- GND (used). Routed all the way to the RP2040 GND node used by
+         Q1's emitter/panel-tie circuit below: they are the same net,
+         and previously nothing on this diagram showed that. The lead
+         first jogs down off the GP1 row (so it isn't collinear with
+         GP1's lead across the board, which used to misread as a direct
+         GP1-to-GND wire), then runs down the left margin, under the
+         board, and back up to join the ground node at (450,260). -->
     <circle cx="60" cy="150" r="6" fill="#1e7d32" stroke="#123f19" stroke-width="1.5"/>
-    <polyline points="60,150 40,150 40,172 -10,172" fill="none" stroke="#1e7d32" stroke-width="2.5"/>
+    <polyline points="60,150 40,150 40,172 -95,172 -95,590 350,590 350,260 450,260"
+               fill="none" stroke="#1e7d32" stroke-width="2.5"/>
     <text x="-10" y="167" text-anchor="start" fill="#1e7d32" font-weight="bold">GND</text>
 
     <!-- 3V3 -->
@@ -166,8 +169,12 @@
   <!-- emitter wire down to a ground node -->
   <line x1="720" y1="195" x2="720" y2="260" stroke="#222" stroke-width="2.5"/>
   <line x1="720" y1="260" x2="450" y2="260" stroke="#222" stroke-width="2.5"/>
-  <line x1="450" y1="260" x2="450" y2="150" stroke="#222" stroke-width="2.5" marker-end="url(#arrow)"/>
   <text x="585" y="278" font-size="11.5" text-anchor="middle" fill="#555">Q1 emitter -&gt; RP2040 GND</text>
+
+  <!-- Junction: this is where Q1's emitter, the physical GND pin's wire
+       (routed in from the left, see left-column group above), and the
+       ground symbol below all meet: same net, one point. -->
+  <circle cx="450" cy="260" r="5" fill="#1e7d32"/>
 
   <!-- Ground symbol at the node, dropping to Panel GND -->
   <line x1="450" y1="260" x2="450" y2="330" stroke="#1e7d32" stroke-width="3"/>
@@ -186,16 +193,16 @@
 
   <!-- ================= Legend ================= -->
   <g font-size="12.5">
-    <text x="60" y="580" font-weight="bold" fill="#111">Legend</text>
+    <text x="60" y="625" font-weight="bold" fill="#111">Legend</text>
 
-    <line x1="60" y1="600" x2="100" y2="600" stroke="#222" stroke-width="2.5"/>
-    <text x="108" y="604" fill="#222">Signal path (RP2040 to Green bus)</text>
+    <line x1="60" y1="645" x2="100" y2="645" stroke="#222" stroke-width="2.5"/>
+    <text x="108" y="649" fill="#222">Signal path (RP2040 to Green bus)</text>
 
-    <line x1="380" y1="600" x2="420" y2="600" stroke="#1e7d32" stroke-width="3"/>
-    <text x="428" y="604" fill="#1e7d32">Ground network (RP2040 GND to Panel GND)</text>
+    <line x1="380" y1="645" x2="420" y2="645" stroke="#1e7d32" stroke-width="3"/>
+    <text x="428" y="649" fill="#1e7d32">Ground network (physical GND pin, Q1 emitter, and Panel GND -- all one net)</text>
 
-    <circle cx="800" cy="600" r="5" fill="#cfcfcf" stroke="#666"/>
-    <text x="815" y="604" fill="#777">Unused / not part of this circuit</text>
+    <circle cx="60" cy="663" r="5" fill="#cfcfcf" stroke="#666"/>
+    <text x="75" y="667" fill="#777">Unused / not part of this circuit</text>
   </g>
   </g>
 </svg>
