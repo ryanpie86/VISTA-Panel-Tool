@@ -43,10 +43,14 @@
     <line x1="0" y1="112" x2="55" y2="112" stroke="#888" stroke-width="1.5"/>
     <text x="0" y="108" text-anchor="start" fill="#888">5V</text>
 
-    <!-- GND (used) -->
+    <!-- GND (used). Lead jogs down off the GP1 row on purpose, so the
+         two pins' leads aren't drawn collinear across the board (that
+         previously read as a direct GP1-to-GND wire, which is wrong:
+         GND and GP1 are unrelated nets, only their physical board rows
+         happen to line up). -->
     <circle cx="60" cy="150" r="6" fill="#1e7d32" stroke="#123f19" stroke-width="1.5"/>
-    <line x1="-10" y1="150" x2="55" y2="150" stroke="#1e7d32" stroke-width="2.5"/>
-    <text x="-10" y="145" text-anchor="start" fill="#1e7d32" font-weight="bold">GND</text>
+    <polyline points="60,150 40,150 40,172 -10,172" fill="none" stroke="#1e7d32" stroke-width="2.5"/>
+    <text x="-10" y="167" text-anchor="start" fill="#1e7d32" font-weight="bold">GND</text>
 
     <!-- 3V3 -->
     <circle cx="60" cy="188" r="5" fill="#cfcfcf" stroke="#666"/>
