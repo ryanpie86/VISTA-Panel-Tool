@@ -125,9 +125,9 @@ GP0 (originally earmarked for UART0 alongside GP1) is unused now that the
 Pi interconnect is USB-serial again — see "RP2040-Zero <-> Pi interconnect"
 below. GP1 itself was reassigned to Green TX per the row above.
 
-### Green TX interface schematic (complete design)
+### Complete bus interface schematic
 
-![Green TX interface schematic: RP2040-Zero board silhouette (pin layout matching the Waveshare pinout reference photo) with GP1 driving R_B, D1, and Q1's base; Q1's collector to Green; Q1's emitter and the RP2040's GND tied to Panel GND via a dedicated wire](docs/hardware/green-tx-schematic.jpg)
+![RP2040-Zero to Vista-20P bus interface schematic: board silhouette (pin layout matching the Waveshare pinout reference photo) showing all three signal circuits -- Green TX (GP1 through R_B, D1, and Q1 to Green), the Green bus-monitor divider (GP28, 33k/10k), and the Yellow RX divider (GP26, 39k/10k) -- plus a shared GND bus tying the physical GND pin, Q1's emitter, and both dividers to the panel's GND terminal, and the Vista-20P's own 4-terminal bus block (GREEN, RED unconnected, BLACK, YELLOW) on the right](docs/hardware/green-tx-schematic.jpg)
 
 (Source vector version: `docs/hardware/green-tx-schematic.svg`, same content.)
 
@@ -135,6 +135,9 @@ Board silhouette and pin positions (GND/GP1 on the top board, GP26/GP27/
 GP28 further down the left column) match the Waveshare RP2040-Zero's own
 pinout reference photo. The board also breaks GND out again on its
 underside pin group (same net) — either GND pad works for the panel tie.
+The panel's RED (+12V AUX) terminal is shown for completeness but isn't
+wired to the RP2040 at all — the board is USB-powered from the Pi instead
+(see "RP2040-Zero <-> Pi interconnect" below).
 
 Two things this diagram makes explicit that the BOM/pin-table prose above
 doesn't show visually:
