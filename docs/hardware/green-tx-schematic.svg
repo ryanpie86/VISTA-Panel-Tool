@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1750 800" font-family="Helvetica, Arial, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1750 830" font-family="Helvetica, Arial, sans-serif">
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path d="M0,0 L10,5 L0,10 z" fill="#222"/>
@@ -9,13 +9,16 @@
     <marker id="arrowGold" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path d="M0,0 L10,5 L0,10 z" fill="#a3781f"/>
     </marker>
+    <marker id="arrowRed12v" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#b5391f"/>
+    </marker>
   </defs>
 
-  <rect x="0" y="0" width="1750" height="800" fill="#ffffff"/>
+  <rect x="0" y="0" width="1750" height="830" fill="#ffffff"/>
 
   <!-- Title -->
   <text x="20" y="30" font-size="20" font-weight="bold" fill="#111">RP2040-Zero to Vista-20P bus interface: complete circuit</text>
-  <text x="20" y="50" font-size="13" fill="#555">Board silhouette/pin layout matches the Waveshare RP2040-Zero pinout reference photo. All three signal circuits plus the panel's own bus terminals.</text>
+  <text x="20" y="50" font-size="13" fill="#555">Board/pin layout matches the Waveshare reference photo.</text>
 
   <g transform="translate(120,0)">
   <!-- ================= RP2040-Zero board ================= -->
@@ -98,49 +101,91 @@
     <text x="335" y="192" text-anchor="start" fill="#999" font-size="12">GP2 - GP13 (unused)</text>
   </g>
 
-  <!-- ================= Lane A: Green TX (GP1 -> gate resistor -> M1) ================= -->
-  <!-- Revision: 2N2222+D1 BJT stage replaced entirely with a logic-level
-       N-channel MOSFET (IRLZ44N). No D1 needed: the gate is capacitively
-       isolated from drain/source, so there is no DC path for Green's
-       idle-high voltage to backfeed into GP1, unlike a BJT's
-       base-collector junction. hFE and base current are also no longer
-       a variable: the gate just needs to clear the threshold voltage,
-       which IRLZ44N does comfortably under 3.3V. -->
+  <!-- ================= Lane A: Green TX (GP1 -> Q1 pre-driver -> P1 high-side switch) ================= -->
+  <!-- Revision: bench testing found Green idles at 0V and real keypads
+       pull it UP to transmit (confirmed with our device fully
+       disconnected from the bus): the opposite polarity from what was
+       assumed this whole project. A low-side switch (the original
+       2N2222+D1, and then the IRLZ44N MOSFET) can only pull a line DOWN
+       toward GND; it can never pull an already-0V line any higher, which
+       is why neither ever produced any effect on the bus regardless of
+       how much was fixed around them. Fix: a high-side P-channel switch
+       (P1, IRF4905) that sources current onto Green from +12V AUX (RED)
+       instead. P1's gate can't be driven directly from 3.3V logic
+       referenced to a 12V source, so Q1 (a simple 2N2222, reusing the
+       exact base-drive circuit already proven correct all session) acts
+       as a level-shifting pre-driver: GP1 high pulls Q1's collector (and
+       P1's gate) down near 0V, giving P1 a strongly negative Vgs and
+       turning it on; GP1 low lets the 10k pull-up hold P1's gate at
+       +12V, Vgs=0, off. -->
   <line x1="380" y1="150" x2="450" y2="150" stroke="#222" stroke-width="3" marker-end="url(#arrow)"/>
 
   <g stroke="#222" stroke-width="2" fill="none">
     <polyline points="450,150 458,138 468,162 478,138 488,162 498,138 508,150"/>
   </g>
-  <text x="478" y="122" font-size="12" text-anchor="middle" fill="#222" font-weight="bold">R_G</text>
-  <text x="478" y="106" font-size="11" text-anchor="middle" fill="#555">220&#937;</text>
+  <text x="478" y="122" font-size="12" text-anchor="middle" fill="#222" font-weight="bold">R_B</text>
+  <text x="478" y="106" font-size="11" text-anchor="middle" fill="#555">1k&#937;</text>
 
-  <line x1="508" y1="150" x2="595" y2="150" stroke="#222" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <line x1="508" y1="150" x2="560" y2="150" stroke="#222" stroke-width="2.5" marker-end="url(#arrow)"/>
 
-  <!-- M1: N-channel MOSFET symbol: gate plate, insulating gap, then a
-       drain/source channel with an inward-pointing arrow on the source
-       lead (standard N-channel convention). -->
+  <!-- Q1: 2N2222 pre-driver (NPN, open-collector level shifter) -->
   <g stroke="#222" stroke-width="2" fill="none">
-    <line x1="595" y1="130" x2="595" y2="170"/>
-    <line x1="610" y1="105" x2="610" y2="195"/>
-    <line x1="610" y1="105" x2="720" y2="105"/>
-    <line x1="610" y1="195" x2="660" y2="195"/>
+    <line x1="560" y1="150" x2="590" y2="150"/>
+    <line x1="590" y1="120" x2="590" y2="180"/>
+    <line x1="590" y1="132" x2="610" y2="105"/>
+    <line x1="590" y1="168" x2="610" y2="195"/>
+    <polygon points="602,190 610,195 605,183" fill="#222" stroke="none"/>
   </g>
-  <polygon points="655,188 660,195 647,197" fill="#222" stroke="none"/>
-  <text x="650" y="228" font-size="12" text-anchor="middle" fill="#222" font-weight="bold">M1</text>
-  <text x="650" y="243" font-size="12" text-anchor="middle" fill="#222" font-weight="bold">IRLZ44N</text>
-  <text x="722" y="100" font-size="11" fill="#555">drain</text>
-  <text x="655" y="210" font-size="11" fill="#555" text-anchor="middle">source</text>
-  <text x="580" y="140" font-size="10.5" fill="#555" text-anchor="end">gate</text>
+  <text x="595" y="145" font-size="12" fill="#222" font-weight="bold">Q1</text>
+  <text x="590" y="228" font-size="12" text-anchor="middle" fill="#222" font-weight="bold">2N2222</text>
+  <text x="585" y="112" font-size="11" fill="#555" text-anchor="end">collector</text>
+  <text x="612" y="210" font-size="11" fill="#555">emitter</text>
+  <text x="555" y="140" font-size="10.5" fill="#555" text-anchor="end">base</text>
 
-  <!-- drain -> GREEN bus, all the way to the panel terminal -->
-  <line x1="720" y1="105" x2="720" y2="70" stroke="#222" stroke-width="2.5"/>
-  <line x1="720" y1="70" x2="1250" y2="70" stroke="#222" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <!-- Q1 emitter -> GND bus -->
+  <line x1="610" y1="195" x2="610" y2="260" stroke="#222" stroke-width="2.5"/>
+  <line x1="610" y1="260" x2="450" y2="260" stroke="#222" stroke-width="2.5"/>
+  <text x="530" y="278" font-size="11.5" text-anchor="middle" fill="#555">Q1 emitter -&gt; GND bus</text>
 
-  <!-- source -> GND bus -->
-  <line x1="660" y1="195" x2="720" y2="195" stroke="#222" stroke-width="2.5"/>
-  <line x1="720" y1="195" x2="720" y2="260" stroke="#222" stroke-width="2.5"/>
-  <line x1="720" y1="260" x2="450" y2="260" stroke="#222" stroke-width="2.5"/>
-  <text x="585" y="278" font-size="11.5" text-anchor="middle" fill="#555">M1 source -&gt; GND bus</text>
+  <!-- Node A: Q1 collector / P1 gate / 10k pull-up junction. Placed
+       between Green's rail (y=70, above) and the +12V AUX rail (y=135,
+       below) so P1's drain and source align directly with each,
+       no extra jogs needed. -->
+  <circle cx="610" cy="105" r="4.5" fill="#222"/>
+  <line x1="610" y1="105" x2="660" y2="105" stroke="#222" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- 10k pull-up: node A -> +12V AUX rail -->
+  <g stroke="#222" stroke-width="2" fill="none">
+    <polyline points="610,105 618,113 602,121 618,129 610,135"/>
+  </g>
+  <text x="596" y="122" font-size="11" text-anchor="end" fill="#555">10k&#937;</text>
+
+  <!-- P1: IRF4905 P-channel MOSFET, high-side switch. Drain (top) ties
+       directly to Green's rail; source (bottom) ties directly to the
+       +12V AUX rail. Arrow on the source lead points outward from the
+       channel: standard P-channel convention (opposite of N-channel's
+       inward arrow). -->
+  <g stroke="#222" stroke-width="2" fill="none">
+    <line x1="660" y1="90" x2="660" y2="120"/>
+    <line x1="680" y1="70" x2="680" y2="135"/>
+  </g>
+  <polygon points="673,132 680,135 675,124" fill="#222" stroke="none"/>
+  <text x="750" y="105" font-size="12" text-anchor="middle" fill="#222" font-weight="bold">P1</text>
+  <text x="750" y="120" font-size="12" text-anchor="middle" fill="#222" font-weight="bold">IRF4905</text>
+  <text x="695" y="60" font-size="11" fill="#555">drain</text>
+  <text x="695" y="152" font-size="11" fill="#555">source</text>
+  <text x="635" y="120" font-size="10.5" fill="#555" text-anchor="middle">gate</text>
+
+  <!-- P1 drain -> GREEN bus, all the way to the panel terminal -->
+  <line x1="680" y1="70" x2="1250" y2="70" stroke="#222" stroke-width="2.5" marker-end="url(#arrow)"/>
+
+  <!-- +12V AUX rail (RED): feeds P1's source and the pull-up, routed to
+       the panel's RED terminal below Green's own row so the two never
+       cross. -->
+  <line x1="610" y1="135" x2="1200" y2="135" stroke="#b5391f" stroke-width="2.5"/>
+  <line x1="1200" y1="135" x2="1200" y2="150" stroke="#b5391f" stroke-width="2.5"/>
+  <line x1="1200" y1="150" x2="1250" y2="150" stroke="#b5391f" stroke-width="2.5" marker-end="url(#arrowRed12v)"/>
+  <text x="900" y="127" font-size="11" text-anchor="middle" fill="#b5391f" font-weight="bold">+12V AUX rail (from Panel RED)</text>
 
   <!-- ================= Shared GND bus (x=450, y=260 to 640) ================= -->
   <!-- Everything ground-referenced taps this one vertical bus: Q1's
@@ -213,10 +258,10 @@
   <text x="1265" y="65" font-size="13" fill="#eafbea" font-weight="bold">GREEN</text>
   <text x="1265" y="80" font-size="10.5" fill="#c9e8c9">keypad data in (TX + monitor)</text>
 
-  <circle cx="1250" cy="150" r="6" fill="#888" stroke="#444" stroke-width="1.5"/>
-  <text x="1265" y="145" font-size="13" fill="#ccc" font-weight="bold">RED</text>
-  <text x="1265" y="160" font-size="10.5" fill="#999">+12V AUX -- not connected</text>
-  <text x="1265" y="173" font-size="10.5" fill="#999">(RP2040 is USB-powered)</text>
+  <circle cx="1250" cy="150" r="6" fill="#b5391f" stroke="#6e2312" stroke-width="1.5"/>
+  <text x="1265" y="145" font-size="13" fill="#f6d9d2" font-weight="bold">RED</text>
+  <text x="1265" y="160" font-size="10.5" fill="#e0aa9e">+12V AUX -- feeds the P1 high-side</text>
+  <text x="1265" y="173" font-size="10.5" fill="#e0aa9e">switch only (RP2040 itself is USB-powered)</text>
 
   <circle cx="1250" cy="345" r="6" fill="#1e7d32" stroke="#0d3d13" stroke-width="1.5"/>
   <text x="1265" y="340" font-size="13" fill="#eafbea" font-weight="bold">BLACK</text>
@@ -234,7 +279,7 @@
     <text x="108" y="762" fill="#222">Green TX signal path (RP2040 to Green)</text>
 
     <line x1="380" y1="758" x2="420" y2="758" stroke="#1e7d32" stroke-width="3"/>
-    <text x="428" y="762" fill="#1e7d32">Ground bus (physical GND pin, M1 source, both dividers, Panel GND)</text>
+    <text x="428" y="762" fill="#1e7d32">Ground bus (physical GND pin, Q1 emitter, both dividers, Panel GND)</text>
 
     <line x1="920" y1="758" x2="960" y2="758" stroke="#2a6fb0" stroke-width="2.5"/>
     <text x="968" y="762" fill="#2a6fb0">Green bus-monitor path (GP28)</text>
@@ -242,8 +287,11 @@
     <line x1="1250" y1="758" x2="1290" y2="758" stroke="#c8952a" stroke-width="2.5"/>
     <text x="1298" y="762" fill="#a3781f">Yellow RX path (GP26)</text>
 
-    <circle cx="60" cy="778" r="5" fill="#cfcfcf" stroke="#666"/>
-    <text x="75" y="782" fill="#777">Unused / not part of this circuit</text>
+    <line x1="60" y1="778" x2="100" y2="778" stroke="#b5391f" stroke-width="2.5"/>
+    <text x="108" y="782" fill="#b5391f">+12V AUX rail (Panel RED -&gt; P1's source/pull-up only)</text>
+
+    <circle cx="60" cy="798" r="5" fill="#cfcfcf" stroke="#666"/>
+    <text x="75" y="802" fill="#777">Unused / not part of this circuit</text>
   </g>
   </g>
 </svg>

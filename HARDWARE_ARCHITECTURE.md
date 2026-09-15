@@ -117,7 +117,7 @@ ADC-capable pins (GP26-29) are broken out on this board, resolving the
 | Signal | Pin | Notes |
 |---|---|---|
 | Yellow (panel TX → RP2040 RX, through the 39K/10K divider) | **GP26** (ADC0) | Digital input mode. **Confirmed via the Vista-20P technician manual** — see "Still open" item 1: this doc briefly had Yellow/Green swapped based on a bench observation that turned out to be a correlation error, corrected back once the manual settled it |
-| Green (RP2040 TX → panel, drives M1's gate) | **GP1** | Digital output. Originally GP27 (ADC1) — moved after bench testing found GP27's GPIO driver dead on this chip: with GP27 fully isolated from the drive circuit (base/gate resistor lifted) and a firmware-forced, panel-independent announce burst (`Vista::debugForceKeyAnnounce()`) firing every second, an oscilloscope showed nothing but noise on GP27, while the identical burst came out clean and correctly bit-shaped on GP1 with no other change. GP1 was already free (see below). Switch device: **M1, IRLZ44N logic-level N-channel MOSFET**, 220Ω gate resistor — see "Still open" item 1 for the full story of why this replaced the original 2N2222+D1 BJT stage |
+| Green (RP2040 TX → panel, drives Q1's base) | **GP1** | Digital output. Originally GP27 (ADC1) — moved after bench testing found GP27's GPIO driver dead on this chip: with GP27 fully isolated from the drive circuit (base/gate resistor lifted) and a firmware-forced, panel-independent announce burst (`Vista::debugForceKeyAnnounce()`) firing every second, an oscilloscope showed nothing but noise on GP27, while the identical burst came out clean and correctly bit-shaped on GP1 with no other change. GP1 was already free (see below). Switch device: **high-side driver — Q1 (2N2222) NPN pre-driver/level-shifter feeding P1 (IRF4905) P-channel MOSFET**, 1kΩ base resistor on Q1, 10kΩ gate pull-up on P1, sourcing from a new +12V AUX rail tapped off the panel's own RED terminal — see "Still open" item 1 for the full story of why this replaced first the 2N2222+D1 BJT stage and then the IRLZ44N low-side MOSFET stage |
 | Green bus-monitor tap (separate divider, per esphome-vistaECP's `MONITORTX` feature) | **GP28** (ADC2) | Digital input — passively decodes *other* devices' traffic on Green (other keypads, zone expanders, RF receiver modules) that the RP2040 wouldn't otherwise see; not collision detection on the RP2040's own TX. Feeds the future "Wireless (RF) zone visibility" / datalogger-role work in `CONCEPT.md`, not required for near-term ECP read/write |
 | Status LED (WS2812) | **GP16**, internal | Hardwired on-board, not a header pin — nothing to wire |
 
@@ -127,7 +127,7 @@ below. GP1 itself was reassigned to Green TX per the row above.
 
 ### Complete bus interface schematic
 
-![RP2040-Zero to Vista-20P bus interface schematic: board silhouette (pin layout matching the Waveshare pinout reference photo) showing all three signal circuits -- Green TX (GP1 through a 220Ω gate resistor to M1, an IRLZ44N logic-level MOSFET, drain to Green), the Green bus-monitor divider (GP28, 33k/10k), and the Yellow RX divider (GP26, 39k/10k) -- plus a shared GND bus tying the physical GND pin, M1's source, and both dividers to the panel's GND terminal, and the Vista-20P's own 4-terminal bus block (GREEN, RED unconnected, BLACK, YELLOW) on the right](docs/hardware/green-tx-schematic.jpg)
+![RP2040-Zero to Vista-20P bus interface schematic: board silhouette (pin layout matching the Waveshare pinout reference photo) showing all circuits -- Green TX (GP1 through a 1kΩ base resistor to Q1, a 2N2222 NPN pre-driver, whose collector drives P1's gate through a 10kΩ pull-up to a new +12V AUX rail; P1, an IRF4905 P-channel MOSFET, sources current from that same AUX rail onto Green through its drain when Q1 pulls its gate low), the Green bus-monitor divider (GP28, 33k/10k), and the Yellow RX divider (GP26, 39k/10k) -- plus a shared GND bus tying the physical GND pin, Q1's emitter, and both dividers to the panel's GND terminal, and the Vista-20P's own 4-terminal bus block (GREEN, RED now wired as the +12V AUX source, BLACK, YELLOW) on the right](docs/hardware/green-tx-schematic.jpg)
 
 (Source vector version: `docs/hardware/green-tx-schematic.svg`, same content.)
 
@@ -135,27 +135,37 @@ Board silhouette and pin positions (GND/GP1 on the top board, GP26/GP27/
 GP28 further down the left column) match the Waveshare RP2040-Zero's own
 pinout reference photo. The board also breaks GND out again on its
 underside pin group (same net) — either GND pad works for the panel tie.
-The panel's RED (+12V AUX) terminal is shown for completeness but isn't
-wired to the RP2040 at all — the board is USB-powered from the Pi instead
-(see "RP2040-Zero <-> Pi interconnect" below).
+The panel's RED (+12V AUX) terminal is now wired — it feeds the P1
+high-side switch's source and gate pull-up only; the RP2040-Zero itself
+stays USB-powered from the Pi (see "RP2040-Zero <-> Pi interconnect"
+below).
 
 Two things this diagram makes explicit that the BOM/pin-table prose above
 doesn't show visually:
-- **The RP2040 GND ↔ panel GND wire is load-bearing, not optional.** M1's
-  source references RP2040 GND, not panel GND directly, so missing this
+- **The RP2040 GND ↔ panel GND wire is load-bearing, not optional.** Q1's
+  emitter references RP2040 GND, not panel GND directly, so missing this
   wire doesn't just degrade the signal -- it means Green never carries a
   valid logic level from the panel's point of view at all, while Yellow
   RX keeps working anyway (enough margin on that side to tolerate a
   floating reference). See "Still open" item 1's ground-reference update
   below for the full story of how this was found.
-- **The switch device is a MOSFET (M1, IRLZ44N), not a BJT.** The
-  original design used a 2N2222 with a series diode (D1) specifically to
-  block the panel bus's idle-high voltage from backfeeding through the
-  transistor's base-collector junction into GP1. That whole failure mode
-  doesn't exist with a MOSFET: the gate is capacitively isolated from
-  drain/source, so there's no DC path for backfeed at all, and no D1 is
-  needed. See "Still open" item 1 for the full story of why the BJT
-  approach was abandoned after extensive bench investigation.
+- **The switch is a high-side P-channel MOSFET (P1, IRF4905) driven
+  through an NPN pre-driver (Q1, 2N2222), not a low-side switch.** Bench
+  testing (with the RP2040 device fully disconnected from the bus) found
+  Green actually idles at ~0V and real keypad transmissions pull it UP —
+  the opposite of what this project assumed throughout the earlier BJT
+  and MOSFET low-side designs below. A low-side switch (emitter/source at
+  GND) can only pull a line DOWN, so it's structurally incapable of
+  driving an idle-low line any higher, which is why neither of those
+  earlier designs ever produced an effect on the bus. P1 instead sources
+  current onto Green from the new +12V AUX rail; since P1's source sits
+  at +12V rather than GND, GP1 can't drive its gate directly (both logic
+  levels would leave Vgs strongly negative), so Q1 acts as an
+  open-collector level shifter: GP1 high pulls Q1's collector (P1's gate)
+  down near 0V, giving P1 a strongly negative Vgs and turning it on; GP1
+  low lets the 10kΩ pull-up hold P1's gate at +12V, Vgs=0, off. See
+  "Still open" item 1 for the full story of why the low-side approach was
+  abandoned after this was discovered.
 
 ## RP2040-Zero <-> Pi interconnect: USB-serial (reverted from UART)
 
@@ -543,6 +553,42 @@ Vista panel keypad bus (4-wire ECP)
    base-collector junction, so D1 is no longer needed at all. See the
    "Complete bus interface schematic" above for the current circuit.
    Live retest against the real panel pending.
+
+   **Update (low-side topology itself was the fault; switched to a
+   high-side driver -- pending physical rebuild and live retest):** M1
+   was wired in and tested against the real panel; still no effect on
+   Green at all, with the same "good drive signal in, nothing out" pattern
+   as the BJT stage before it. Rather than continuing to swap components,
+   the actual polarity of Green was measured directly, with the RP2040
+   device fully disconnected from the bus: **Green idles at 0V and real
+   keypad transmissions pull it UP**, not idle-high-with-pulldown as this
+   whole project had assumed (that assumption came from correctly
+   documented Yellow behavior — Yellow does idle high at ~13.8V — bleeding
+   into Green's entry). This invalidates the entire low-side switch
+   approach, BJT and MOSFET alike: an emitter/source referenced to GND can
+   only pull a line down toward GND, never push an already-low line
+   higher, so neither M1 nor the original Q1+D1 stage was ever capable of
+   producing the required signal, regardless of how many components got
+   swapped or how much current was available.
+
+   **Fix: replaced the low-side M1 stage with a high-side driver** — Q1 (a
+   2N2222, reusing the exact base-drive circuit already proven correct
+   this whole session) as an open-collector pre-driver/level-shifter,
+   feeding P1 (an IRF4905 P-channel MOSFET, already on hand) as the actual
+   high-side switch. P1 sources current onto Green from a new +12V AUX
+   rail tapped off the panel's own RED terminal (previously unused, since
+   the RP2040 itself is USB-powered); a 10kΩ pull-up holds P1's gate at
+   +12V (off) when Q1 is off, and Q1 pulls it down near 0V (on, strongly
+   negative Vgs) when GP1 drives high. Because Q1 handles the level
+   shifting, P1's own gate threshold is irrelevant — any P-channel power
+   MOSFET with adequate Vds/current rating works, so IRF4905 (-55V Vds,
+   well past the ~12-14V AUX rail, very low RDS(on)) is a solid fit rather
+   than a stopgap. No firmware change is needed: GP1's high/low meaning
+   ("drive"/"idle") is unchanged, only the pre-driver stage's own logic
+   inverts it into the correct gate drive for P1. See the "Complete bus
+   interface schematic" above for the current circuit. **Pending: physical
+   rebuild (parts on hand, not yet assembled) and live retest against the
+   real panel.**
 2. **Battery capacity** — deliberately left undecided, and not needed
    during the development/testing phase — the build will run on isolated
    wall power (via the isolated USB-C/DC-DC charge path already in the
