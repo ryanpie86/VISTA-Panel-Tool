@@ -103,6 +103,16 @@ class RP2040SerialTransport(PushUpdatePollingTransport):
             # Serial Monitor connection instead of this transport).
             logger.info(line)
             return
+        if line.startswith("RAW "):
+            # Structured frame decode (e.g. "RAW op=F7 valid=1 size=45
+            # bytes=..."), sent unconditionally by getExtBytes() for every
+            # frame seen on Yellow -- same silent-discard gap as
+            # GREENRAW/GREENEDGE had before those were added. Needed so a
+            # single send_keys.py/spam_key.py run can show whether the
+            # panel ever sends an F6 inviting our own address, without a
+            # second raw serial connection fighting this one for the port.
+            logger.info(line)
+            return
         # PONG or unrecognized -- ignore
 
     async def send_keys(self, partition: int, keys: str) -> None:
