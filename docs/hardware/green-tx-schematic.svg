@@ -98,46 +98,49 @@
     <text x="335" y="192" text-anchor="start" fill="#999" font-size="12">GP2 - GP13 (unused)</text>
   </g>
 
-  <!-- ================= Lane A: Green TX (GP1 -> R_B -> D1 -> Q1) ================= -->
+  <!-- ================= Lane A: Green TX (GP1 -> gate resistor -> M1) ================= -->
+  <!-- Revision: 2N2222+D1 BJT stage replaced entirely with a logic-level
+       N-channel MOSFET (IRLZ44N). No D1 needed: the gate is capacitively
+       isolated from drain/source, so there is no DC path for Green's
+       idle-high voltage to backfeed into GP1, unlike a BJT's
+       base-collector junction. hFE and base current are also no longer
+       a variable: the gate just needs to clear the threshold voltage,
+       which IRLZ44N does comfortably under 3.3V. -->
   <line x1="380" y1="150" x2="450" y2="150" stroke="#222" stroke-width="3" marker-end="url(#arrow)"/>
 
   <g stroke="#222" stroke-width="2" fill="none">
     <polyline points="450,150 458,138 468,162 478,138 488,162 498,138 508,150"/>
   </g>
-  <text x="478" y="122" font-size="12" text-anchor="middle" fill="#222" font-weight="bold">R_B</text>
-  <text x="478" y="106" font-size="11" text-anchor="middle" fill="#555">1k&#937;</text>
+  <text x="478" y="122" font-size="12" text-anchor="middle" fill="#222" font-weight="bold">R_G</text>
+  <text x="478" y="106" font-size="11" text-anchor="middle" fill="#555">220&#937;</text>
 
-  <line x1="508" y1="150" x2="560" y2="150" stroke="#222" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <line x1="508" y1="150" x2="595" y2="150" stroke="#222" stroke-width="2.5" marker-end="url(#arrow)"/>
 
-  <g stroke="#222" stroke-width="2.5" fill="none">
-    <polygon points="560,138 560,162 590,150"/>
-    <line x1="590" y1="138" x2="590" y2="162"/>
-  </g>
-  <text x="575" y="118" font-size="12" text-anchor="middle" fill="#222" font-weight="bold">D1 -- 1N4148</text>
-
-  <line x1="605" y1="150" x2="660" y2="150" stroke="#222" stroke-width="2.5" marker-end="url(#arrow)"/>
-
+  <!-- M1: N-channel MOSFET symbol: gate plate, insulating gap, then a
+       drain/source channel with an inward-pointing arrow on the source
+       lead (standard N-channel convention). -->
   <g stroke="#222" stroke-width="2" fill="none">
-    <line x1="660" y1="150" x2="690" y2="150"/>
-    <line x1="690" y1="120" x2="690" y2="180"/>
-    <line x1="690" y1="132" x2="720" y2="105"/>
-    <line x1="690" y1="168" x2="720" y2="195"/>
-    <polygon points="712,190 720,195 715,183" fill="#222" stroke="none"/>
+    <line x1="595" y1="130" x2="595" y2="170"/>
+    <line x1="610" y1="105" x2="610" y2="195"/>
+    <line x1="610" y1="105" x2="720" y2="105"/>
+    <line x1="610" y1="195" x2="660" y2="195"/>
   </g>
-  <text x="700" y="145" font-size="12" fill="#222" font-weight="bold">Q1</text>
-  <text x="700" y="70" font-size="12" text-anchor="middle" fill="#222" font-weight="bold">2N2222</text>
-  <text x="722" y="100" font-size="11" fill="#555">collector</text>
-  <text x="722" y="210" font-size="11" fill="#555">emitter</text>
-  <text x="655" y="140" font-size="10.5" fill="#555" text-anchor="end">base</text>
+  <polygon points="655,188 660,195 647,197" fill="#222" stroke="none"/>
+  <text x="650" y="228" font-size="12" text-anchor="middle" fill="#222" font-weight="bold">M1</text>
+  <text x="650" y="243" font-size="12" text-anchor="middle" fill="#222" font-weight="bold">IRLZ44N</text>
+  <text x="722" y="100" font-size="11" fill="#555">drain</text>
+  <text x="655" y="210" font-size="11" fill="#555" text-anchor="middle">source</text>
+  <text x="580" y="140" font-size="10.5" fill="#555" text-anchor="end">gate</text>
 
-  <!-- collector -> GREEN bus, all the way to the panel terminal -->
+  <!-- drain -> GREEN bus, all the way to the panel terminal -->
   <line x1="720" y1="105" x2="720" y2="70" stroke="#222" stroke-width="2.5"/>
   <line x1="720" y1="70" x2="1250" y2="70" stroke="#222" stroke-width="2.5" marker-end="url(#arrow)"/>
 
-  <!-- emitter -> GND bus -->
+  <!-- source -> GND bus -->
+  <line x1="660" y1="195" x2="720" y2="195" stroke="#222" stroke-width="2.5"/>
   <line x1="720" y1="195" x2="720" y2="260" stroke="#222" stroke-width="2.5"/>
   <line x1="720" y1="260" x2="450" y2="260" stroke="#222" stroke-width="2.5"/>
-  <text x="585" y="278" font-size="11.5" text-anchor="middle" fill="#555">Q1 emitter -&gt; GND bus</text>
+  <text x="585" y="278" font-size="11.5" text-anchor="middle" fill="#555">M1 source -&gt; GND bus</text>
 
   <!-- ================= Shared GND bus (x=450, y=260 to 640) ================= -->
   <!-- Everything ground-referenced taps this one vertical bus: Q1's
@@ -231,7 +234,7 @@
     <text x="108" y="762" fill="#222">Green TX signal path (RP2040 to Green)</text>
 
     <line x1="380" y1="758" x2="420" y2="758" stroke="#1e7d32" stroke-width="3"/>
-    <text x="428" y="762" fill="#1e7d32">Ground bus (physical GND pin, Q1 emitter, both dividers, Panel GND)</text>
+    <text x="428" y="762" fill="#1e7d32">Ground bus (physical GND pin, M1 source, both dividers, Panel GND)</text>
 
     <line x1="920" y1="758" x2="960" y2="758" stroke="#2a6fb0" stroke-width="2.5"/>
     <text x="968" y="762" fill="#2a6fb0">Green bus-monitor path (GP28)</text>

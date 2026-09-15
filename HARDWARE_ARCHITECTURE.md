@@ -117,7 +117,7 @@ ADC-capable pins (GP26-29) are broken out on this board, resolving the
 | Signal | Pin | Notes |
 |---|---|---|
 | Yellow (panel TX → RP2040 RX, through the 39K/10K divider) | **GP26** (ADC0) | Digital input mode. **Confirmed via the Vista-20P technician manual** — see "Still open" item 1: this doc briefly had Yellow/Green swapped based on a bench observation that turned out to be a correlation error, corrected back once the manual settled it |
-| Green (RP2040 TX → panel, drives the NPN base) | **GP1** | Digital output. Originally GP27 (ADC1) — moved after bench testing found GP27's GPIO driver dead on this chip: with GP27 fully isolated from the base circuit (1kΩ resistor lifted) and a firmware-forced, panel-independent announce burst (`Vista::debugForceKeyAnnounce()`) firing every second, an oscilloscope showed nothing but noise on GP27, while the identical burst came out clean and correctly bit-shaped on GP1 with no other change. GP1 was already free (see below). Base transistor: 2N2222, 1kΩ base resistor (see "Still open" item 1 for the sizing) |
+| Green (RP2040 TX → panel, drives M1's gate) | **GP1** | Digital output. Originally GP27 (ADC1) — moved after bench testing found GP27's GPIO driver dead on this chip: with GP27 fully isolated from the drive circuit (base/gate resistor lifted) and a firmware-forced, panel-independent announce burst (`Vista::debugForceKeyAnnounce()`) firing every second, an oscilloscope showed nothing but noise on GP27, while the identical burst came out clean and correctly bit-shaped on GP1 with no other change. GP1 was already free (see below). Switch device: **M1, IRLZ44N logic-level N-channel MOSFET**, 220Ω gate resistor — see "Still open" item 1 for the full story of why this replaced the original 2N2222+D1 BJT stage |
 | Green bus-monitor tap (separate divider, per esphome-vistaECP's `MONITORTX` feature) | **GP28** (ADC2) | Digital input — passively decodes *other* devices' traffic on Green (other keypads, zone expanders, RF receiver modules) that the RP2040 wouldn't otherwise see; not collision detection on the RP2040's own TX. Feeds the future "Wireless (RF) zone visibility" / datalogger-role work in `CONCEPT.md`, not required for near-term ECP read/write |
 | Status LED (WS2812) | **GP16**, internal | Hardwired on-board, not a header pin — nothing to wire |
 
@@ -127,7 +127,7 @@ below. GP1 itself was reassigned to Green TX per the row above.
 
 ### Complete bus interface schematic
 
-![RP2040-Zero to Vista-20P bus interface schematic: board silhouette (pin layout matching the Waveshare pinout reference photo) showing all three signal circuits -- Green TX (GP1 through R_B, D1, and Q1 to Green), the Green bus-monitor divider (GP28, 33k/10k), and the Yellow RX divider (GP26, 39k/10k) -- plus a shared GND bus tying the physical GND pin, Q1's emitter, and both dividers to the panel's GND terminal, and the Vista-20P's own 4-terminal bus block (GREEN, RED unconnected, BLACK, YELLOW) on the right](docs/hardware/green-tx-schematic.jpg)
+![RP2040-Zero to Vista-20P bus interface schematic: board silhouette (pin layout matching the Waveshare pinout reference photo) showing all three signal circuits -- Green TX (GP1 through a 220Ω gate resistor to M1, an IRLZ44N logic-level MOSFET, drain to Green), the Green bus-monitor divider (GP28, 33k/10k), and the Yellow RX divider (GP26, 39k/10k) -- plus a shared GND bus tying the physical GND pin, M1's source, and both dividers to the panel's GND terminal, and the Vista-20P's own 4-terminal bus block (GREEN, RED unconnected, BLACK, YELLOW) on the right](docs/hardware/green-tx-schematic.jpg)
 
 (Source vector version: `docs/hardware/green-tx-schematic.svg`, same content.)
 
@@ -141,22 +141,21 @@ wired to the RP2040 at all — the board is USB-powered from the Pi instead
 
 Two things this diagram makes explicit that the BOM/pin-table prose above
 doesn't show visually:
-- **The RP2040 GND ↔ panel GND wire is load-bearing, not optional.** Q1's
-  emitter references RP2040 GND, not panel GND directly, so missing this
+- **The RP2040 GND ↔ panel GND wire is load-bearing, not optional.** M1's
+  source references RP2040 GND, not panel GND directly, so missing this
   wire doesn't just degrade the signal -- it means Green never carries a
   valid logic level from the panel's point of view at all, while Yellow
   RX keeps working anyway (enough margin on that side to tolerate a
   floating reference). See "Still open" item 1's ground-reference update
   below for the full story of how this was found.
-- **D1 exists to block backfeed, not to pass signal.** Without it, the
-  panel bus's idle-high voltage leaks back through Q1's collector-base
-  junction, up R_B, and into GP1's GPIO protection diode -- confirmed by
-  the RP2040's status LED lighting with USB unplugged, powered by
-  leakage current alone. D1 is now installed and that specific symptom
-  (and the real-keypad-17 bus lockup that came with it) is confirmed
-  resolved; see "Still open" item 1's backfeed update below for what's
-  still being chased (Green itself still isn't producing a signal at
-  Q1's collector, under active bench investigation).
+- **The switch device is a MOSFET (M1, IRLZ44N), not a BJT.** The
+  original design used a 2N2222 with a series diode (D1) specifically to
+  block the panel bus's idle-high voltage from backfeeding through the
+  transistor's base-collector junction into GP1. That whole failure mode
+  doesn't exist with a MOSFET: the gate is capacitively isolated from
+  drain/source, so there's no DC path for backfeed at all, and no D1 is
+  needed. See "Still open" item 1 for the full story of why the BJT
+  approach was abandoned after extensive bench investigation.
 
 ## RP2040-Zero <-> Pi interconnect: USB-serial (reverted from UART)
 
@@ -513,6 +512,37 @@ Vista panel keypad bus (4-wire ECP)
    the R_B/D1/Q1 stage off breadboard (soldered, point-to-point) to rule
    out a breadboard-induced short or bad contact from a crowded board with
    a lot of rework on it -- still open.
+
+   **Update (BJT approach abandoned, switched to MOSFET -- resolved
+   pending live retest):** after the off-breadboard rebuild, the base was
+   eventually confirmed to be driving correctly and exactly as expected --
+   a clean, correctly-timed 3-byte address-announce pattern, clamped at
+   the expected ~0.6V Vbe level once measured at the right vertical scale
+   (earlier "nothing at the base" readings were themselves measurement
+   artifacts: wrong multimeter mode reading a diode junction, and wrong
+   oscilloscope scale for a small clamped swing). Despite that provably
+   correct base drive, the collector never produced any response, on any
+   scale, free-running or triggered, synced to the real send cadence, at
+   a probe point independently proven live (real keypad-17 traffic was
+   clearly visible at the exact same point). This held across five
+   separate 2N2222 units, both emitter/collector orientations, the
+   original 1kΩ R_B and a doubled-current 500Ω (two 1kΩ in parallel), with
+   every individual junction, gain (hFE), and wiring continuity check
+   passing clean. A base that works and a collector that never once
+   responds, across that many components, points at something structural
+   in the BJT topology's sensitivity to current and gain rather than any
+   single bad part.
+
+   **Fix: replaced the 2N2222+D1 stage entirely with M1, a logic-level
+   N-channel MOSFET (IRLZ44N), gate driven from GP1 through a 220Ω gate
+   resistor, source to the GND bus, drain to Green.** This sidesteps the
+   whole class of problem: a MOSFET's conduction depends on gate voltage
+   clearing a threshold, not on base current and current gain the way a
+   BJT's does, and its gate is capacitively isolated from drain/source --
+   there is no DC backfeed path the way there was through a BJT's
+   base-collector junction, so D1 is no longer needed at all. See the
+   "Complete bus interface schematic" above for the current circuit.
+   Live retest against the real panel pending.
 2. **Battery capacity** — deliberately left undecided, and not needed
    during the development/testing phase — the build will run on isolated
    wall power (via the isolated USB-C/DC-DC charge path already in the
