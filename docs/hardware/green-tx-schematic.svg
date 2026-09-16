@@ -42,11 +42,12 @@
     <text x="0" y="108" text-anchor="start" fill="#888">5V</text>
 
     <!-- GND: jogs off the GP1 row, then routes all the way to the shared
-         GND bus on the right (see below) -->
-    <circle cx="60" cy="150" r="6" fill="#1e7d32" stroke="#123f19" stroke-width="1.5"/>
+         GND bus on the right (see below). Colored to match the ECP bus's
+         real BLACK wire, not a schematic-convention color. -->
+    <circle cx="60" cy="150" r="6" fill="#222" stroke="#000" stroke-width="1.5"/>
     <polyline points="60,150 40,150 40,172 -95,172 -95,650 450,650 450,260"
-               fill="none" stroke="#1e7d32" stroke-width="2.5"/>
-    <text x="-10" y="167" text-anchor="start" fill="#1e7d32" font-weight="bold">GND</text>
+               fill="none" stroke="#222" stroke-width="2.5"/>
+    <text x="-10" y="167" text-anchor="start" fill="#222" font-weight="bold">GND</text>
 
     <circle cx="60" cy="188" r="5" fill="#cfcfcf" stroke="#666"/>
     <line x1="0" y1="188" x2="55" y2="188" stroke="#888" stroke-width="1.5"/>
@@ -58,11 +59,12 @@
 
     <!-- GP28: Green bus-monitor tap. Routes under the board, well clear
          of the board's right edge (x=280), up to its own 33k/10k divider
-         at x=500. See Lane B below. -->
-    <circle cx="60" cy="264" r="5.5" fill="#2a6fb0" stroke="#123a5c" stroke-width="1.5"/>
+         at x=500. See Lane B below. Colored green: it taps the same
+         physical Green wire the TX path drives. -->
+    <circle cx="60" cy="264" r="5.5" fill="#1e7d32" stroke="#123f19" stroke-width="1.5"/>
     <polyline points="60,264 -70,264 -70,690 470,690 470,460"
-               fill="none" stroke="#2a6fb0" stroke-width="2"/>
-    <text x="-70" y="260" text-anchor="start" fill="#2a6fb0">GP28 (Green monitor tap)</text>
+               fill="none" stroke="#1e7d32" stroke-width="2"/>
+    <text x="-70" y="260" text-anchor="start" fill="#1e7d32">GP28 (Green monitor tap)</text>
 
     <circle cx="60" cy="302" r="5" fill="#cfcfcf" stroke="#666"/>
     <line x1="-42" y1="302" x2="55" y2="302" stroke="#999" stroke-width="1.5" stroke-dasharray="3,3"/>
@@ -91,8 +93,8 @@
     <line x1="285" y1="112" x2="330" y2="112" stroke="#888" stroke-width="1.5"/>
     <text x="335" y="108" text-anchor="start" fill="#888">GP0</text>
 
-    <circle cx="280" cy="150" r="6.5" fill="#222" stroke="#000" stroke-width="1.8"/>
-    <line x1="285" y1="150" x2="380" y2="150" stroke="#222" stroke-width="3"/>
+    <circle cx="280" cy="150" r="6.5" fill="#1e7d32" stroke="#123f19" stroke-width="1.8"/>
+    <line x1="285" y1="150" x2="380" y2="150" stroke="#1e7d32" stroke-width="3"/>
     <text x="335" y="140" text-anchor="start" fill="#111" font-weight="bold" font-size="15">GP1</text>
     <text x="335" y="158" text-anchor="start" fill="#333" font-size="11">(Green TX)</text>
 
@@ -118,7 +120,7 @@
        P1's gate) down near 0V, giving P1 a strongly negative Vgs and
        turning it on; GP1 low lets the 10k pull-up hold P1's gate at
        +12V, Vgs=0, off. -->
-  <line x1="380" y1="150" x2="450" y2="150" stroke="#222" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="380" y1="150" x2="450" y2="150" stroke="#1e7d32" stroke-width="3" marker-end="url(#arrowGreen)"/>
 
   <g stroke="#222" stroke-width="2" fill="none">
     <polyline points="450,150 458,138 468,162 478,138 488,162 498,138 508,150"/>
@@ -126,7 +128,7 @@
   <text x="478" y="122" font-size="12" text-anchor="middle" fill="#222" font-weight="bold">R_B</text>
   <text x="478" y="106" font-size="11" text-anchor="middle" fill="#555">1k&#937;</text>
 
-  <line x1="508" y1="150" x2="560" y2="150" stroke="#222" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <line x1="508" y1="150" x2="560" y2="150" stroke="#1e7d32" stroke-width="2.5" marker-end="url(#arrowGreen)"/>
 
   <!-- Q1: 2N2222 pre-driver (NPN, open-collector level shifter) -->
   <g stroke="#222" stroke-width="2" fill="none">
@@ -151,8 +153,8 @@
        between Green's rail (y=70, above) and the +12V AUX rail (y=135,
        below) so P1's drain and source align directly with each,
        no extra jogs needed. -->
-  <circle cx="610" cy="105" r="4.5" fill="#222"/>
-  <line x1="610" y1="105" x2="660" y2="105" stroke="#222" stroke-width="2" marker-end="url(#arrow)"/>
+  <circle cx="610" cy="105" r="4.5" fill="#1e7d32"/>
+  <line x1="610" y1="105" x2="660" y2="105" stroke="#1e7d32" stroke-width="2" marker-end="url(#arrowGreen)"/>
 
   <!-- 10k pull-up: node A -> +12V AUX rail -->
   <g stroke="#222" stroke-width="2" fill="none">
@@ -177,7 +179,7 @@
   <text x="635" y="120" font-size="10.5" fill="#555" text-anchor="middle">gate</text>
 
   <!-- P1 drain -> GREEN bus, all the way to the panel terminal -->
-  <line x1="680" y1="70" x2="1250" y2="70" stroke="#222" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <line x1="680" y1="70" x2="1250" y2="70" stroke="#1e7d32" stroke-width="2.5" marker-end="url(#arrowGreen)"/>
 
   <!-- +12V AUX rail (RED): feeds P1's source and the pull-up, routed to
        the panel's RED terminal below Green's own row so the two never
@@ -192,41 +194,42 @@
        emitter and the physical GND pin's wire at the top, the two
        divider bottom-resistors partway down, and the panel's BLACK
        terminal branching off partway down too. -->
-  <line x1="450" y1="260" x2="450" y2="640" stroke="#1e7d32" stroke-width="3"/>
-  <circle cx="450" cy="260" r="5" fill="#1e7d32"/>
+  <line x1="450" y1="260" x2="450" y2="640" stroke="#222" stroke-width="3"/>
+  <circle cx="450" cy="260" r="5" fill="#222"/>
 
   <!-- branch to panel BLACK (GND) terminal -->
-  <circle cx="450" cy="345" r="4.5" fill="#1e7d32"/>
-  <line x1="450" y1="345" x2="1250" y2="345" stroke="#1e7d32" stroke-width="3" marker-end="url(#arrowGreen)"/>
-  <text x="700" y="335" font-size="11.5" text-anchor="middle" fill="#1e7d32" font-weight="bold">dedicated GND wire (RP2040 GND -&gt; Panel GND)</text>
+  <circle cx="450" cy="345" r="4.5" fill="#222"/>
+  <line x1="450" y1="345" x2="1250" y2="345" stroke="#222" stroke-width="3" marker-end="url(#arrow)"/>
+  <text x="700" y="335" font-size="11.5" text-anchor="middle" fill="#222" font-weight="bold">dedicated GND wire (RP2040 GND -&gt; Panel GND)</text>
 
   <!-- branch to GP28 divider's bottom resistor -->
-  <circle cx="450" cy="500" r="4.5" fill="#1e7d32"/>
+  <circle cx="450" cy="500" r="4.5" fill="#222"/>
 
   <!-- ================= Lane B: Green bus-monitor divider (GP28) ================= -->
   <!-- Divider node at x=500, well clear of the board's right edge
        (x=280) so no label or component overlaps the board silhouette. -->
-  <line x1="470" y1="460" x2="500" y2="460" stroke="#2a6fb0" stroke-width="2"/>
-  <circle cx="500" cy="460" r="4" fill="#2a6fb0"/>
-  <text x="500" y="400" font-size="11" text-anchor="middle" fill="#2a6fb0">Green bus-monitor</text>
-  <text x="500" y="414" font-size="11" text-anchor="middle" fill="#2a6fb0">divider (GP28)</text>
+  <line x1="470" y1="460" x2="500" y2="460" stroke="#1e7d32" stroke-width="2"/>
+  <circle cx="500" cy="460" r="4" fill="#1e7d32"/>
+  <text x="500" y="400" font-size="11" text-anchor="middle" fill="#1e7d32">Green bus-monitor</text>
+  <text x="500" y="414" font-size="11" text-anchor="middle" fill="#1e7d32">divider (GP28)</text>
   <!-- R_top (33k), node -> up to the shared Green bus -->
   <g stroke="#222" stroke-width="2" fill="none">
     <polyline points="500,460 508,448 492,436 508,424 500,412"/>
   </g>
   <text x="516" y="440" font-size="11" text-anchor="start" fill="#555">33k&#937;</text>
-  <line x1="500" y1="412" x2="500" y2="70" stroke="#2a6fb0" stroke-width="2"/>
-  <line x1="500" y1="70" x2="1250" y2="70" stroke="#2a6fb0" stroke-width="2" marker-end="url(#arrow)"/>
-  <!-- R_bottom (10k), node -> down to GND bus -->
+  <line x1="500" y1="412" x2="500" y2="70" stroke="#1e7d32" stroke-width="2"/>
+  <line x1="500" y1="70" x2="1250" y2="70" stroke="#1e7d32" stroke-width="2" marker-end="url(#arrowGreen)"/>
+  <!-- R_bottom (10k), node -> down to GND bus. Colored black/GND here,
+       not green: this end of the divider returns to ground, not Green. -->
   <g stroke="#222" stroke-width="2" fill="none">
     <polyline points="500,460 508,472 492,484 508,496 500,508"/>
   </g>
   <text x="516" y="485" font-size="11" text-anchor="start" fill="#555">10k&#937;</text>
-  <line x1="500" y1="508" x2="500" y2="500" stroke="#2a6fb0" stroke-width="2"/>
-  <line x1="500" y1="500" x2="450" y2="500" stroke="#2a6fb0" stroke-width="2"/>
+  <line x1="500" y1="508" x2="500" y2="500" stroke="#222" stroke-width="2"/>
+  <line x1="500" y1="500" x2="450" y2="500" stroke="#222" stroke-width="2"/>
 
   <!-- branch to GP26 divider's bottom resistor -->
-  <circle cx="450" cy="640" r="4.5" fill="#1e7d32"/>
+  <circle cx="450" cy="640" r="4.5" fill="#222"/>
 
   <!-- ================= Lane C: Yellow RX divider (GP26) ================= -->
   <!-- Divider node at x=560, y=600, staggered right of and well below
@@ -241,13 +244,14 @@
   <text x="576" y="580" font-size="11" text-anchor="start" fill="#555">39k&#937;</text>
   <line x1="560" y1="552" x2="560" y2="460" stroke="#c8952a" stroke-width="2"/>
   <line x1="560" y1="460" x2="1250" y2="460" stroke="#c8952a" stroke-width="2" marker-end="url(#arrowGold)"/>
-  <!-- R_bottom (10k), node -> down to GND bus -->
+  <!-- R_bottom (10k), node -> down to GND bus. Colored black/GND here,
+       not gold: this end of the divider returns to ground, not Yellow. -->
   <g stroke="#222" stroke-width="2" fill="none">
     <polyline points="560,600 568,612 552,624 568,636 560,648"/>
   </g>
   <text x="576" y="625" font-size="11" text-anchor="start" fill="#555">10k&#937;</text>
-  <line x1="560" y1="648" x2="560" y2="640" stroke="#c8952a" stroke-width="2"/>
-  <line x1="560" y1="640" x2="450" y2="640" stroke="#c8952a" stroke-width="2"/>
+  <line x1="560" y1="648" x2="560" y2="640" stroke="#222" stroke-width="2"/>
+  <line x1="560" y1="640" x2="450" y2="640" stroke="#222" stroke-width="2"/>
 
   <!-- ================= Vista-20P panel terminal block ================= -->
   <rect x="1250" y="40" width="220" height="480" rx="10" fill="#2b2b2b" stroke="#000" stroke-width="2"/>
@@ -263,32 +267,32 @@
   <text x="1265" y="160" font-size="10.5" fill="#e0aa9e">+12V AUX -- feeds the P1 high-side</text>
   <text x="1265" y="173" font-size="10.5" fill="#e0aa9e">switch only (RP2040 itself is USB-powered)</text>
 
-  <circle cx="1250" cy="345" r="6" fill="#1e7d32" stroke="#0d3d13" stroke-width="1.5"/>
-  <text x="1265" y="340" font-size="13" fill="#eafbea" font-weight="bold">BLACK</text>
-  <text x="1265" y="355" font-size="10.5" fill="#c9e8c9">GND</text>
+  <circle cx="1250" cy="345" r="6" fill="#dcdcdc" stroke="#000" stroke-width="1.5"/>
+  <text x="1265" y="340" font-size="13" fill="#f0f0f0" font-weight="bold">BLACK</text>
+  <text x="1265" y="355" font-size="10.5" fill="#cccccc">GND</text>
 
   <circle cx="1250" cy="460" r="6" fill="#c8952a" stroke="#5c4310" stroke-width="1.5"/>
   <text x="1265" y="455" font-size="13" fill="#f6e6c0" font-weight="bold">YELLOW</text>
   <text x="1265" y="470" font-size="10.5" fill="#d9c290">panel data out</text>
 
   <!-- ================= Legend ================= -->
+  <!-- Colors match the ECP bus's real physical wire colors (Green,
+       Yellow, Red, Black), not an abstract schematic convention: same
+       scheme as docs/hardware/green-tx-photo-reference.html. -->
   <g font-size="12.5">
     <text x="60" y="740" font-weight="bold" fill="#111">Legend</text>
 
-    <line x1="60" y1="758" x2="100" y2="758" stroke="#222" stroke-width="2.5"/>
-    <text x="108" y="762" fill="#222">Green TX signal path (RP2040 to Green)</text>
+    <line x1="60" y1="758" x2="100" y2="758" stroke="#1e7d32" stroke-width="2.5"/>
+    <text x="108" y="762" fill="#1e7d32">Green wire &#8212; TX path (GP1&#8594;Q1&#8594;P1) + GP28 monitor tap (Panel GREEN)</text>
 
-    <line x1="380" y1="758" x2="420" y2="758" stroke="#1e7d32" stroke-width="3"/>
-    <text x="428" y="762" fill="#1e7d32">Ground bus (physical GND pin, Q1 emitter, both dividers, Panel GND)</text>
+    <line x1="580" y1="758" x2="620" y2="758" stroke="#c8952a" stroke-width="2.5"/>
+    <text x="628" y="762" fill="#a3781f">Yellow wire &#8212; GP26 RX divider (Panel YELLOW)</text>
 
-    <line x1="920" y1="758" x2="960" y2="758" stroke="#2a6fb0" stroke-width="2.5"/>
-    <text x="968" y="762" fill="#2a6fb0">Green bus-monitor path (GP28)</text>
+    <line x1="980" y1="758" x2="1020" y2="758" stroke="#b5391f" stroke-width="2.5"/>
+    <text x="1028" y="762" fill="#b5391f">Red wire &#8212; +12V AUX (Panel RED)</text>
 
-    <line x1="1250" y1="758" x2="1290" y2="758" stroke="#c8952a" stroke-width="2.5"/>
-    <text x="1298" y="762" fill="#a3781f">Yellow RX path (GP26)</text>
-
-    <line x1="60" y1="778" x2="100" y2="778" stroke="#b5391f" stroke-width="2.5"/>
-    <text x="108" y="782" fill="#b5391f">+12V AUX rail (Panel RED -&gt; P1's source/pull-up only)</text>
+    <line x1="60" y1="778" x2="100" y2="778" stroke="#222" stroke-width="3"/>
+    <text x="108" y="782" fill="#222">Black wire &#8212; GND bus (physical GND pin, Q1 emitter, both dividers, Panel BLACK)</text>
 
     <circle cx="60" cy="798" r="5" fill="#cfcfcf" stroke="#666"/>
     <text x="75" y="802" fill="#777">Unused / not part of this circuit</text>
