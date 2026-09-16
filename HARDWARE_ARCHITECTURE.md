@@ -167,6 +167,29 @@ doesn't show visually:
   "Still open" item 1 for the full story of why the low-side approach was
   abandoned after this was discovered.
 
+### Physical parts & wiring photo reference
+
+![RP2040-Zero to Vista-20P bus interface: physical parts and wiring reference, showing real photos of each component (Waveshare RP2040-Zero board, a 2N2222 in TO-92 package, a generic axial resistor stood in for R_B/pull-up/divider resistors, a generic TO-220 power MOSFET package stood in for the IRF4905, and a Vista-20P board's terminal strip) arranged left to right in signal-flow order and connected by color-coded wires matching the schematic, plus the Green bus-monitor (GP28) and Yellow RX (GP26) dividers below and a legend](docs/hardware/green-tx-photo-reference.jpg)
+
+(Source: `docs/hardware/green-tx-photo-reference.html`, references photos in
+`docs/hardware/photos/` -- see `docs/hardware/photos/CREDITS.md` for sources
+and licenses.)
+
+A companion to the schematic above, for identifying parts and orienting
+them correctly while sourcing/assembling: real photos of each package type
+(RP2040-Zero, 2N2222 TO-92, a generic TO-220 MOSFET package standing in for
+the IRF4905, a generic axial resistor standing in for every resistor value
+in the circuit, and the Vista-20P's own terminal strip with terminal
+numbers legible) instead of schematic symbols. Pin/leg orientation
+(2N2222's E-B-C, IRF4905's Gate-Drain-Source, which Vista-20P terminal
+number is which wire color) is called out as text under each photo rather
+than traced pixel-by-pixel from the photo itself -- these are generic
+manufacturer/stock reference photos of the package types, not photos of
+this project's own bench hardware. The schematic remains the authority for
+electrical topology and component values; this diagram is for "what does
+this part actually look like and roughly where does it go," not a
+replacement for it.
+
 ## RP2040-Zero <-> Pi interconnect: USB-serial (reverted from UART)
 
 **Decided (revisited):** back to a single USB-C cable between the

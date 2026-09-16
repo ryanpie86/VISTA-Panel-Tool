@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    width: 1900px;
+    height: 1300px;
+    background: #ffffff;
+    font-family: Helvetica, Arial, sans-serif;
+    position: relative;
+  }
+  .title { position: absolute; left: 30px; top: 18px; font-size: 24px; font-weight: bold; color: #111; }
+  .subtitle { position: absolute; left: 30px; top: 52px; font-size: 14px; color: #555; width: 1840px; }
+  .card {
+    position: absolute;
+    background: #fff;
+    border: 1.5px solid #ccc;
+    border-radius: 10px;
+    box-shadow: 0 3px 8px rgba(0,0,0,0.18);
+    padding: 8px;
+    text-align: center;
+  }
+  .card img { display: block; border-radius: 4px; }
+  .card .name { font-weight: bold; font-size: 15px; color: #111; margin-top: 6px; }
+  .card .sub { font-size: 12px; color: #555; margin-top: 2px; }
+  .card .pin { font-size: 11px; color: #333; margin-top: 2px; }
+  .note { position: absolute; background: #fff; border: 1.5px dashed #999; border-radius: 8px; padding: 8px 12px; font-size: 12.5px; color: #333; text-align: left; }
+  svg.wires { position: absolute; left: 0; top: 0; width: 1900px; height: 1300px; }
+  .legend { position: absolute; left: 30px; top: 1220px; font-size: 13px; }
+  .legend .row { display: inline-block; margin-right: 40px; }
+  .legend .swatch { display: inline-block; width: 34px; height: 4px; vertical-align: middle; margin-right: 6px; }
+</style>
+</head>
+<body>
+
+  <div class="title">RP2040-Zero to Vista-20P bus interface: physical parts &amp; wiring reference</div>
+  <div class="subtitle">Real component photos (generic stock references for the TO-92/TO-220/axial packages -- your own units will look the same). Wire colors match the electrical schematic in docs/hardware/green-tx-schematic.svg. Pin/leg labels below each photo are printed part identifications, not traced from the pixels of that specific photo.</div>
+
+  <svg class="wires" viewBox="0 0 1900 1300">
+    <defs>
+      <marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="#222"/>
+      </marker>
+      <marker id="aGreen" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="#1e7d32"/>
+      </marker>
+      <marker id="aBlue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="#2a6fb0"/>
+      </marker>
+      <marker id="aGold" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="#a3781f"/>
+      </marker>
+      <marker id="aRed" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="#b5391f"/>
+      </marker>
+    </defs>
+
+    <!-- ===== Main Green-TX row, all cards vertically centered on y=300 ===== -->
+    <!-- GP1 -> R_B -->
+    <path d="M 440,300 L 480,300" stroke="#222" stroke-width="3" fill="none" marker-end="url(#a)"/>
+    <!-- R_B -> Q1 base -->
+    <path d="M 650,300 L 700,300" stroke="#222" stroke-width="3" fill="none" marker-end="url(#a)"/>
+    <!-- Q1 collector -> node A -->
+    <path d="M 900,300 L 990,300" stroke="#222" stroke-width="3" fill="none"/>
+    <circle cx="990" cy="300" r="6" fill="#222"/>
+    <!-- node A -> P1 gate -->
+    <path d="M 990,300 L 1150,300" stroke="#222" stroke-width="3" fill="none" marker-end="url(#a)"/>
+    <!-- P1 drain -> panel GREEN terminal (term 6) -->
+    <path d="M 1400,260 L 1430,260 L 1430,300 L 1681,300" stroke="#222" stroke-width="3" fill="none" marker-end="url(#a)"/>
+
+    <!-- node A -> pull-up resistor -> +12V AUX rail (red), branch drawn below the main row -->
+    <path d="M 990,300 L 990,400" stroke="#b5391f" stroke-width="3" fill="none"/>
+    <path d="M 990,470 L 990,530" stroke="#b5391f" stroke-width="3" fill="none"/>
+    <path d="M 990,530 L 1700,530 L 1700,400 L 1601,400 L 1601,330" stroke="#b5391f" stroke-width="3" fill="none" marker-end="url(#aRed)"/>
+    <path d="M 990,530 L 1300,530 L 1300,340 L 1275,340" stroke="#b5391f" stroke-width="3" fill="none" marker-end="url(#aRed)"/>
+
+    <!-- Q1 emitter -> GND bus -->
+    <path d="M 800,430 L 800,650" stroke="#1e7d32" stroke-width="3" fill="none"/>
+    <!-- RP2040 GND pin -> GND bus -->
+    <path d="M 250,480 L 250,650" stroke="#1e7d32" stroke-width="3" fill="none"/>
+    <!-- GND bus horizontal -->
+    <path d="M 250,650 L 1780,650" stroke="#1e7d32" stroke-width="3.5" fill="none"/>
+    <!-- GND bus -> panel BLACK terminal (term 4) -->
+    <path d="M 1548,650 L 1548,340" stroke="#1e7d32" stroke-width="3" fill="none" marker-end="url(#aGreen)"/>
+
+    <!-- GP28 -> Green bus-monitor divider -->
+    <path d="M 350,430 L 350,730 L 560,730" stroke="#2a6fb0" stroke-width="3" fill="none" marker-end="url(#aBlue)"/>
+    <!-- divider top resistor -> shared Green net (ties back to panel GREEN, same node as P1 drain) -->
+    <path d="M 700,730 L 740,730" stroke="#2a6fb0" stroke-width="2.5" fill="none" marker-end="url(#aBlue)"/>
+    <!-- divider bottom resistor -> GND bus -->
+    <path d="M 630,810 L 630,900 L 420,900 L 420,650" stroke="#2a6fb0" stroke-width="2.5" fill="none"/>
+
+    <!-- GP26 -> Yellow RX divider -->
+    <path d="M 300,430 L 300,1030 L 900,1030" stroke="#a3781f" stroke-width="3" fill="none" marker-end="url(#aGold)"/>
+    <!-- divider top resistor -> Yellow rail -> panel YELLOW terminal (term 7) -->
+    <path d="M 1040,1030 L 1120,1030 L 1120,1110 L 1749,1110 L 1749,340" stroke="#a3781f" stroke-width="2.5" fill="none" marker-end="url(#aGold)"/>
+    <!-- divider bottom resistor -> GND bus -->
+    <path d="M 970,1110 L 970,1160 L 450,1160 L 450,650" stroke="#a3781f" stroke-width="2.5" fill="none"/>
+  </svg>
+
+  <!-- RP2040-Zero board -->
+  <div class="card" style="left:60px; top:125px; width:380px;">
+    <img src="photos/rp2040-zero.jpg" width="364" height="273">
+    <div class="name">RP2040-Zero (Waveshare)</div>
+    <div class="sub">Pin numbers are silkscreened on the board itself (visible above)</div>
+    <div class="pin">GP1 = Green TX &middot; GP26 = Yellow RX &middot; GP28 = Green monitor &middot; GND pin</div>
+  </div>
+
+  <!-- R_B resistor -->
+  <div class="card" style="left:480px; top:225px; width:170px;">
+    <img src="photos/resistor.jpg" width="154" height="103">
+    <div class="name">R_B</div>
+    <div class="sub">1k&#937; (generic axial resistor shown; yours reads brown-black-red)</div>
+  </div>
+
+  <!-- Q1 -->
+  <div class="card" style="left:700px; top:150px; width:200px;">
+    <img src="photos/2n2222.jpg" width="184" height="206">
+    <div class="name">Q1 &mdash; 2N2222</div>
+    <div class="pin">Flat face toward you, leads down: E &middot; B &middot; C (left to right)</div>
+  </div>
+
+  <!-- Pull-up resistor (node A branch, below main row) -->
+  <div class="card" style="left:915px; top:400px; width:150px;">
+    <img src="photos/resistor.jpg" width="134" height="89">
+    <div class="name">Pull-up</div>
+    <div class="sub">10k&#937;, node A &rarr; +12V AUX</div>
+  </div>
+
+  <!-- P1 -->
+  <div class="card" style="left:1150px; top:185px; width:250px;">
+    <img src="photos/to220-mosfet.jpg" width="234" height="156">
+    <div class="name">P1 &mdash; IRF4905 (TO-220)</div>
+    <div class="pin">Label facing you, legs down: Gate &middot; Drain &middot; Source (left to right). Metal tab = Drain.</div>
+  </div>
+
+  <!-- Panel terminal strip -->
+  <div class="card" style="left:1440px; top:135px; width:450px;">
+    <img src="photos/vista20p-terminals.jpg" width="434" height="281">
+    <div class="name">Vista-20P terminal strip</div>
+    <div class="pin">Term 4 = BLACK (GND) &middot; Term 5 = RED (+12V AUX) &middot; Term 6 = GREEN (data) &middot; Term 7 = YELLOW (data)</div>
+  </div>
+
+  <!-- GND bus label -->
+  <div class="note" style="left:60px; top:610px; width:170px;">
+    <div class="name" style="color:#1e7d32; font-weight:bold;">GND bus</div>
+    <div class="sub">Ties: RP2040 GND pin, Q1 emitter, both divider bottoms, Panel terminal 4</div>
+  </div>
+
+  <!-- Green bus-monitor divider (GP28) -->
+  <div class="card" style="left:560px; top:680px; width:140px;">
+    <img src="photos/resistor.jpg" width="124" height="83">
+    <div class="name">33k&#937;</div>
+  </div>
+  <div class="note" style="left:750px; top:715px; width:230px; font-size:11.5px;">
+    taps the Green wire &mdash; same physical node as P1's drain / panel terminal 6, just further along the same wire
+  </div>
+  <div class="card" style="left:560px; top:775px; width:140px;">
+    <img src="photos/resistor.jpg" width="124" height="83">
+    <div class="name">10k&#937;</div>
+    <div class="sub">GP28 divider (Green bus-monitor)</div>
+  </div>
+
+  <!-- Yellow RX divider (GP26) -->
+  <div class="card" style="left:900px; top:980px; width:140px;">
+    <img src="photos/resistor.jpg" width="124" height="83">
+    <div class="name">39k&#937;</div>
+  </div>
+  <div class="card" style="left:900px; top:1075px; width:140px;">
+    <img src="photos/resistor.jpg" width="124" height="83">
+    <div class="name">10k&#937;</div>
+    <div class="sub">GP26 divider (Yellow RX)</div>
+  </div>
+
+  <div class="legend">
+    <span class="row"><span class="swatch" style="background:#222;"></span>Green TX signal path</span>
+    <span class="row"><span class="swatch" style="background:#1e7d32;"></span>GND bus</span>
+    <span class="row"><span class="swatch" style="background:#2a6fb0;"></span>Green bus-monitor (GP28)</span>
+    <span class="row"><span class="swatch" style="background:#a3781f;"></span>Yellow RX (GP26)</span>
+    <span class="row"><span class="swatch" style="background:#b5391f;"></span>+12V AUX rail (Panel RED)</span>
+  </div>
+
+</body>
+</html>
