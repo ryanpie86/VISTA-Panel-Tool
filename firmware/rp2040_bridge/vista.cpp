@@ -2160,6 +2160,24 @@ bool Vista::handle()
       if (_cbuf[1] == kpaddr && kpaddr > 0)
       {
         _pendingAck=false;
+#if defined(USE_RP2040)
+        // Bench finding (VISTA-Panel-Tool): timestamped send_keys.py/
+        // log_serial.py captures show a real keypad responding to its F6
+        // invite ~2-3ms after the invite (consistent across many samples),
+        // while writeChars() below -- called synchronously from right here
+        // in handle(), itself called every loop() iteration, as soon as
+        // this same pass recognizes the invite -- gets our own response
+        // onto the wire in 0-1ms. That's not obviously a virtue: it's
+        // plausible the panel's receiver expects some settling/turnaround
+        // time after an invite before it's ready to sample a response,
+        // which real keypad hardware naturally provides (slower firmware,
+        // no PIO-offloaded RX) and our fast RP2040 path skips right past.
+        // Testing that directly: delay to roughly match the real keypad's
+        // own observed timing before responding. If this isn't actually
+        // the missing piece, remove it -- it's pure latency with no other
+        // purpose.
+        delayMicroseconds(2500);
+#endif
         writeChars();
 
       }
