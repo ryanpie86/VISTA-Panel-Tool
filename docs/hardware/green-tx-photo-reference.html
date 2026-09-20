@@ -45,8 +45,8 @@
   <img class="part" src="photos/to220-mosfet.jpg" style="left:830px; top:259px; width:300px; height:199.8px;">
   <div class="label" style="left:825px; top:195px; width:315px;"><b>P1 &mdash; IRF4905 (TO-220)</b><br>leg tips left to right: Gate &middot; Drain &middot; Source. Metal tab = Drain.</div>
 
-  <div class="label" style="left:1010px; top:80px; width:170px; text-align:left;"><b>R_clamp</b> &mdash; 330&#937; 1W</div>
-  <div class="label" style="left:1010px; top:105px; width:170px; text-align:left;"><b>D1</b> &mdash; 11V zener 1W<br>(e.g. 1N4741A)<br>cathode up (to Green), anode down (to GND)</div>
+  <div class="label" style="left:995px; top:65px; width:200px; text-align:left;"><b>R_clamp</b> &mdash; 330&#937; 1W</div>
+  <div class="label" style="left:995px; top:82px; width:200px; text-align:left;"><b>D1</b> &mdash; 11V zener (1N4741A)<br>cathode up (Green), anode down (GND)</div>
   <img class="part" src="photos/diode.jpg" style="left:1150px; top:130px; width:20px; height:282px;">
 
   <img class="part" src="photos/vista20p-terminals.jpg" style="left:1200px; top:150px; width:450px; height:291.2px;">
@@ -88,6 +88,10 @@
          green-tx-schematic.svg's Lane B). -->
     <path d="M 750,620 L 750,596 L 1160,596 L 1160,130" stroke="#1e7d32" stroke-width="2.75" fill="none"/>
     <circle cx="977" cy="130" r="4.5" fill="#1e7d32"/>
+    <!-- Bridges P1's drain (dot above, x=977) to R_clamp's own start
+         (x=1132) -- without this segment the drain wire just stops in
+         open space above P1, short of R_clamp/D1 entirely. -->
+    <path d="M 977,130 L 1132,130" stroke="#1e7d32" stroke-width="2.75" fill="none"/>
 
     <!-- R_clamp (drawn, no stock photo for the value) + D1 (real photo,
          photos/diode.jpg, cathode/black-band end up toward Green -- see
