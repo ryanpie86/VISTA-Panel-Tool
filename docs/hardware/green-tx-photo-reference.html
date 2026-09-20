@@ -46,7 +46,7 @@
   <div class="label" style="left:825px; top:195px; width:350px;"><b>P1 &mdash; IRF4905 (TO-220)</b><br>leg tips left to right: Gate &middot; Drain &middot; Source. Metal tab = Drain.</div>
 
   <div class="label" style="left:1010px; top:80px; width:170px; text-align:left;"><b>R_clamp</b> &mdash; 330&#937; 1W</div>
-  <div class="label" style="left:1010px; top:105px; width:170px; text-align:left;"><b>D1</b> &mdash; 11V zener 1W<br>(e.g. 1N4741A)</div>
+  <div class="label" style="left:1010px; top:105px; width:170px; text-align:left;"><b>D1</b> &mdash; 11V zener 1W<br>(e.g. 1N4741A)<br>cathode up (to Green), anode down (to GND)</div>
 
   <img class="part" src="photos/vista20p-terminals.jpg" style="left:1200px; top:150px; width:450px; height:291.2px;">
   <div class="label" style="left:1200px; top:70px; width:450px;"><b>Vista-20P terminal strip</b><br>Term 4=BLACK(GND) &middot; 5=RED(+12V AUX) &middot; 6=GREEN(data) &middot; 7=YELLOW(data)</div>
@@ -102,8 +102,8 @@
     <path d="M 1150,144 L 1170,144" stroke="#222" stroke-width="2.5" fill="none"/>
     <path d="M 1150,144 L 1146,138" stroke="#222" stroke-width="2" fill="none"/>
     <path d="M 1170,144 L 1174,150" stroke="#222" stroke-width="2" fill="none"/>
-    <path d="M 1151,161 L 1169,161 L 1160,144 Z" stroke="#222" stroke-width="2" fill="none"/>
-    <!-- Plain wire from here to GND -- the diode symbol itself stays
+    <path d="M 1151,161 L 1169,161 L 1160,144 Z" stroke="#222" stroke-width="2" fill="#222"/>
+    <!-- Plain wire from here to GND; the diode symbol itself stays
          above y=161, clear of the gold Yellow-wire crossing at y=175
          below (no junction dot there, see the note above Lane A in the
          schematic for the same convention). -->

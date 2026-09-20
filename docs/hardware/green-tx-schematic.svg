@@ -189,7 +189,7 @@
   <polygon points="673,132 680,135 675,124" fill="#222" stroke="none"/>
   <text x="750" y="105" font-size="12" text-anchor="middle" fill="#222" font-weight="bold">P1</text>
   <text x="750" y="120" font-size="12" text-anchor="middle" fill="#222" font-weight="bold">IRF4905</text>
-  <text x="695" y="60" font-size="11" fill="#555">drain</text>
+  <text x="674" y="64" font-size="11" text-anchor="end" fill="#555">drain</text>
   <text x="695" y="152" font-size="11" fill="#555">source</text>
   <text x="635" y="120" font-size="10.5" fill="#555" text-anchor="middle">gate</text>
 
@@ -203,43 +203,53 @@
        R_clamp (~14V/330 ohm =~42mA, ~0.6W, inside a 1W resistor's
        rating with real margin). Both parts should be 1W: this is a
        field-bench fix, not a production design, and the margin is cheap
-       insurance against a shorted bus. -->
-  <line x1="680" y1="70" x2="742" y2="70" stroke="#1e7d32" stroke-width="2.5"/>
+       insurance against a shorted bus. A short plain stub separates P1's
+       own drain lead from R_clamp's zigzag below; sharing one pixel
+       between "this is P1's terminal" and "this is where R_clamp
+       starts" read as a tangle at this scale. -->
+  <line x1="680" y1="70" x2="700" y2="70" stroke="#1e7d32" stroke-width="2.5"/>
+  <line x1="700" y1="70" x2="755" y2="70" stroke="#1e7d32" stroke-width="2.5"/>
   <g stroke="#222" stroke-width="2" fill="none">
-    <polyline points="680,70 690,58 702,82 714,58 726,82 738,58 742,70"/>
+    <polyline points="700,70 710,58 722,82 734,58 746,82 755,70"/>
   </g>
-  <text x="710" y="44" font-size="12" text-anchor="middle" fill="#222" font-weight="bold">R_clamp</text>
-  <text x="710" y="98" font-size="11" text-anchor="middle" fill="#555">330&#937; 1W</text>
+  <text x="725" y="40" font-size="12" text-anchor="middle" fill="#222" font-weight="bold">R_clamp</text>
+  <text x="725" y="53" font-size="11" text-anchor="middle" fill="#555">330&#937; 1W</text>
 
-  <line x1="742" y1="70" x2="760" y2="70" stroke="#1e7d32" stroke-width="2.5"/>
-  <circle cx="760" cy="70" r="4.5" fill="#1e7d32"/>
+  <line x1="755" y1="70" x2="775" y2="70" stroke="#1e7d32" stroke-width="2.5"/>
+  <circle cx="775" cy="70" r="4.5" fill="#1e7d32"/>
 
-  <!-- D1: zener, cathode (bar, top) at the clamped Green node, anode
-       (triangle apex, bottom) to GND. Conducts in reverse breakdown when
-       the node tries to rise above ~11V, clamping it there and sinking
-       the rest of P1's drive current to GND through the branch below;
-       the opposite of a normal diode's forward-conduction orientation,
-       which is what makes this a voltage clamp rather than a rectifier. -->
-  <line x1="760" y1="70" x2="760" y2="190" stroke="#1e7d32" stroke-width="2"/>
-  <line x1="748" y1="190" x2="772" y2="190" stroke="#222" stroke-width="2.5"/>
-  <line x1="748" y1="190" x2="743" y2="184" stroke="#222" stroke-width="2"/>
-  <line x1="772" y1="190" x2="777" y2="196" stroke="#222" stroke-width="2"/>
-  <polygon points="750,220 770,220 760,190" fill="none" stroke="#222" stroke-width="2"/>
-  <text x="790" y="185" font-size="12" fill="#222" font-weight="bold">D1</text>
-  <text x="790" y="200" font-size="11" fill="#555">11V zener</text>
-  <text x="790" y="214" font-size="11" fill="#555">(e.g. 1N4741A)</text>
-  <line x1="760" y1="220" x2="760" y2="345" stroke="#222" stroke-width="2"/>
-  <circle cx="760" cy="345" r="4.5" fill="#222"/>
-  <text x="765" y="240" font-size="10" fill="#555">crosses the AUX rail line below</text>
-  <text x="765" y="252" font-size="10" fill="#555">(y=135) without connecting to it --</text>
-  <text x="765" y="264" font-size="10" fill="#555">no junction dot there</text>
+  <!-- D1: standard zener symbol (cathode bar+wings, anode triangle),
+       drawn per convention with cathode (bar, top) at the clamped Green
+       node and anode (triangle, bottom) at GND, exactly like every other
+       zener shunt-to-ground clamp is drawn. Explicitly labeled "cathode"
+       and "anode" (matching how Q1/P1's own leads are labeled above)
+       since the symbol's forward-conduction arrow direction is easy to
+       misread as "wrong" here: in normal use this would conduct anode
+       to cathode (bottom to top), but a zener clamp instead conducts in
+       REVERSE breakdown; current actually flows cathode to anode
+       (top to bottom, Green to GND) whenever the node tries to rise
+       above ~11V, sinking the rest of P1's drive current to ground
+       through this branch. The symbol shape doesn't change between the
+       two cases; only the labels here make which one applies explicit. -->
+  <line x1="775" y1="70" x2="775" y2="150" stroke="#1e7d32" stroke-width="2"/>
+  <line x1="761" y1="150" x2="789" y2="150" stroke="#222" stroke-width="2.5"/>
+  <line x1="761" y1="150" x2="755" y2="143" stroke="#222" stroke-width="2"/>
+  <line x1="789" y1="150" x2="795" y2="157" stroke="#222" stroke-width="2"/>
+  <polygon points="763,178 787,178 775,150" fill="#222" stroke="#222" stroke-width="2"/>
+  <text x="805" y="147" font-size="11" fill="#333" font-style="italic">cathode</text>
+  <text x="805" y="182" font-size="11" fill="#333" font-style="italic">anode</text>
+  <text x="805" y="222" font-size="12" fill="#222" font-weight="bold">D1</text>
+  <text x="805" y="237" font-size="11" fill="#555">11V zener</text>
+  <text x="805" y="251" font-size="11" fill="#555">(e.g. 1N4741A)</text>
+  <line x1="775" y1="178" x2="775" y2="345" stroke="#222" stroke-width="2"/>
+  <circle cx="775" cy="345" r="4.5" fill="#222"/>
 
   <!-- clamped Green node -> monitor tap junction -> GREEN bus, all the
        way to the panel terminal. Both the panel and our own GP28
        monitor tap read this clamped node, same as they'd both read the
        same real physical Green wire on the bench; see the monitor
        tap's own rewiring below (Lane B). -->
-  <line x1="760" y1="70" x2="1250" y2="70" stroke="#1e7d32" stroke-width="2.5" marker-end="url(#arrowGreen)"/>
+  <line x1="775" y1="70" x2="1250" y2="70" stroke="#1e7d32" stroke-width="2.5" marker-end="url(#arrowGreen)"/>
   <circle cx="800" cy="70" r="4.5" fill="#1e7d32"/>
 
   <!-- +12V AUX rail (RED): feeds P1's source and the pull-up, routed to
