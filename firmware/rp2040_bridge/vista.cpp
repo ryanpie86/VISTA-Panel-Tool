@@ -1306,6 +1306,28 @@ void Vista::writeChars()
   _expectCmd = 0xf6;
   _retries++;
 
+#if defined(USE_RP2040)
+  // Bench diagnostic (VISTA-Panel-Tool): framesBuilt/resent/gaveUp/acked
+  // (see their declarations above) show THAT a real key-data frame is
+  // being sent and never acked, but not WHY -- this prints exactly what
+  // byte cmdAvail() is now watching for, paired with EXPECTCHK below (what
+  // it actually saw), so a bench capture can show directly whether the
+  // panel's real echo is in the stream at all and just not matching
+  // byte-for-byte, or never appears.
+  Serial.print("TXFRAME expect=");
+  if ((uint8_t)_expectByte < 0x10) Serial.print('0');
+  Serial.print((uint8_t)_expectByte, HEX);
+  Serial.print(" retries=");
+  Serial.print(_retries);
+  Serial.print(" bytes=");
+  for (uint8_t i = 0; i < (uint8_t)(_tmpOutBuf[1] + 2); i++) {
+    uint8_t bb = (uint8_t)_tmpOutBuf[i];
+    if (bb < 0x10) Serial.print('0');
+    Serial.print(bb, HEX);
+    Serial.print(' ');
+  }
+  Serial.println();
+#endif
 }
 
 // void Vista::gpioISRHandler()
@@ -1985,6 +2007,20 @@ bool Vista::handle()
     memset(_cbuf, 0, CMDBUFSIZE); // clear buffer mem
     if (_expectByte && x)
     {
+#if defined(USE_RP2040)
+      // Bench diagnostic (VISTA-Panel-Tool): pairs with TXFRAME above --
+      // every byte compared against _expectByte while a real send is
+      // pending, match or not, so it can be lined up against the RAW/
+      // GREENRAW dump of the same window.
+      Serial.print("EXPECTCHK expect=");
+      if ((uint8_t)_expectByte < 0x10) Serial.print('0');
+      Serial.print((uint8_t)_expectByte, HEX);
+      Serial.print(" got=");
+      if (x < 0x10) Serial.print('0');
+      Serial.print(x, HEX);
+      Serial.print(" match=");
+      Serial.println(x == (uint8_t)_expectByte ? 1 : 0);
+#endif
       if (x == _expectByte)
       {
 #if defined(USE_RP2040)
