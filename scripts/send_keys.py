@@ -55,7 +55,11 @@ async def main() -> None:
     )
     args = parser.parse_args()
 
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    # Timestamped (unlike a plain "%(message)s" format) so the F6-invite-line
+    # to GREENRAW/TXFRAME-line delta can be measured directly from this
+    # output, the same way log_serial.py's timestamps were used to measure
+    # a real keypad's own invite-to-response latency (~2-3ms).
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s.%(msecs)03d %(message)s", datefmt="%H:%M:%S")
 
     transport = RP2040SerialTransport(device=args.device, baud=args.baud)
     await transport.connect()
