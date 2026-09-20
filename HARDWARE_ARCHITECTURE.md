@@ -117,13 +117,14 @@ ADC-capable pins (GP26-29) are broken out on this board, resolving the
 | Signal | Pin | Notes |
 |---|---|---|
 | Yellow (panel TX → RP2040 RX, through the 39K/10K divider) | **GP26** (ADC0) | Digital input mode. **Confirmed via the Vista-20P technician manual** — see "Still open" item 1: this doc briefly had Yellow/Green swapped based on a bench observation that turned out to be a correlation error, corrected back once the manual settled it |
-| Green (RP2040 TX → panel, drives Q1's base) | **GP1** | Digital output. Originally GP27 (ADC1) — moved after bench testing found GP27's GPIO driver dead on this chip: with GP27 fully isolated from the drive circuit (base/gate resistor lifted) and a firmware-forced, panel-independent announce burst (`Vista::debugForceKeyAnnounce()`) firing every second, an oscilloscope showed nothing but noise on GP27, while the identical burst came out clean and correctly bit-shaped on GP1 with no other change. GP1 was already free (see below). Switch device: **high-side driver — Q1 (2N2222) NPN pre-driver/level-shifter feeding P1 (IRF4905) P-channel MOSFET**, 1kΩ base resistor on Q1, 10kΩ gate pull-up on P1, sourcing from a new +12V AUX rail tapped off the panel's own RED terminal — see "Still open" item 1 for the full story of why this replaced first the 2N2222+D1 BJT stage and then the IRLZ44N low-side MOSFET stage |
+| Green (RP2040 TX → panel, drives Q1's base) | **GP0** | Digital output. Originally GP27 (ADC1), then GP1 — both later found dead on this chip. GP27: bench testing with the drive circuit fully isolated (base/gate resistor lifted) and a firmware-forced, panel-independent announce burst (`Vista::debugForceKeyAnnounce()`) firing every second showed nothing but noise on GP27, while the identical burst came out clean and correctly bit-shaped on GP1. GP1: during the high-side Q1/P1 rebuild, real key-send attempts showed `keySendAddrAnnounced` incrementing every attempt (confirming the firmware executed the Green-TX write) but zero pulses on GP1 itself on a scope in Normal trigger mode at the MCU pin — the identical "firmware wrote it, pin never moved" signature as GP27. Moved to GP0 (already free, see below). Switch device: **high-side driver — Q1 (2N2222) NPN pre-driver/level-shifter feeding P1 (IRF4905) P-channel MOSFET**, 1kΩ base resistor on Q1, 10kΩ gate pull-up on P1, sourcing from a new +12V AUX rail tapped off the panel's own RED terminal — see "Still open" item 1 for the full story of why this replaced first the 2N2222+D1 BJT stage and then the IRLZ44N low-side MOSFET stage |
 | Green bus-monitor tap (separate divider, per esphome-vistaECP's `MONITORTX` feature) | **GP28** (ADC2) | Digital input — passively decodes *other* devices' traffic on Green (other keypads, zone expanders, RF receiver modules) that the RP2040 wouldn't otherwise see; not collision detection on the RP2040's own TX. Feeds the future "Wireless (RF) zone visibility" / datalogger-role work in `CONCEPT.md`, not required for near-term ECP read/write |
 | Status LED (WS2812) | **GP16**, internal | Hardwired on-board, not a header pin — nothing to wire |
 
-GP0 (originally earmarked for UART0 alongside GP1) is unused now that the
-Pi interconnect is USB-serial again — see "RP2040-Zero <-> Pi interconnect"
-below. GP1 itself was reassigned to Green TX per the row above.
+GP0 was originally earmarked for UART0 alongside GP1 and freed up when the
+Pi interconnect reverted to USB-serial (see "RP2040-Zero <-> Pi
+interconnect" below) — it's now reassigned to Green TX per the row above,
+after GP1 was also found dead. GP1 itself is now unused.
 
 ### Complete bus interface schematic
 
@@ -612,6 +613,23 @@ Vista panel keypad bus (4-wire ECP)
    interface schematic" above for the current circuit. **Pending: physical
    rebuild (parts on hand, not yet assembled) and live retest against the
    real panel.**
+
+   **Update (physical rebuild complete, GP1 found dead too -- moved to
+   GP0):** the Q1+P1 high-side stage was built and bench-tested against the
+   real panel. Static checks all passed clean: AUX rail 14V, P1's gate
+   sitting at 13.94V at idle (10kΩ pull-up holding it off as designed), P1's
+   drain/Green at 0V at idle (not driving the bus). Leg orientation on both
+   Q1 and P1 confirmed correct. But triggering a real key send produced no
+   pulses on GP1 at all -- confirmed with a scope in Normal trigger mode
+   directly at the MCU pin, not a capture-timing miss. The firmware's own
+   `keySendAddrAnnounced` counter incremented on every attempt, meaning
+   `vistaSerial->write()` (the function that bit-bangs Green TX) executed
+   each time -- the exact same "firmware believes it drove the pin, the pin
+   never moves" signature that isolated GP27 as dead earlier in this
+   project. Same diagnosis, different pin: **Green TX moved to GP0** (see
+   the pin table above), which was already free. Physical wiring must move
+   the 1kΩ base resistor's input lead from GP1 to GP0 to match. Live retest
+   against the real panel on GP0 pending.
 2. **Battery capacity** — deliberately left undecided, and not needed
    during the development/testing phase — the build will run on isolated
    wall power (via the isolated USB-C/DC-DC charge path already in the
