@@ -41,9 +41,11 @@
     <line x1="0" y1="112" x2="55" y2="112" stroke="#888" stroke-width="1.5"/>
     <text x="0" y="108" text-anchor="start" fill="#888">5V</text>
 
-    <!-- GND: jogs off the GP1 row, then routes all the way to the shared
-         GND bus on the right (see below). Colored to match the ECP bus's
-         real BLACK wire, not a schematic-convention color. -->
+    <!-- GND: jogs off the GP0 row (right column, same y as the Green TX
+         pin; a left/right column spatial coincidence, not a
+         connection), then routes all the way to the shared GND bus on
+         the right (see below). Colored to match the ECP bus's real
+         BLACK wire, not a schematic-convention color. -->
     <circle cx="60" cy="150" r="6" fill="#222" stroke="#000" stroke-width="1.5"/>
     <polyline points="60,150 40,150 40,172 -95,172 -95,650 450,650 450,260"
                fill="none" stroke="#222" stroke-width="2.5"/>
@@ -91,11 +93,11 @@
   <g font-size="13">
     <circle cx="280" cy="112" r="5" fill="#cfcfcf" stroke="#666"/>
     <line x1="285" y1="112" x2="330" y2="112" stroke="#888" stroke-width="1.5"/>
-    <text x="335" y="108" text-anchor="start" fill="#888">GP0</text>
+    <text x="335" y="108" text-anchor="start" fill="#999" font-size="12">GP1 (unused)</text>
 
     <circle cx="280" cy="150" r="6.5" fill="#1e7d32" stroke="#123f19" stroke-width="1.8"/>
     <line x1="285" y1="150" x2="380" y2="150" stroke="#1e7d32" stroke-width="3"/>
-    <text x="335" y="140" text-anchor="start" fill="#111" font-weight="bold" font-size="15">GP1</text>
+    <text x="335" y="140" text-anchor="start" fill="#111" font-weight="bold" font-size="15">GP0</text>
     <text x="335" y="158" text-anchor="start" fill="#333" font-size="11">(Green TX)</text>
 
     <circle cx="280" cy="188" r="5" fill="#cfcfcf" stroke="#666"/>
@@ -103,7 +105,7 @@
     <text x="335" y="192" text-anchor="start" fill="#999" font-size="12">GP2 - GP13 (unused)</text>
   </g>
 
-  <!-- ================= Lane A: Green TX (GP1 -> Q1 pre-driver -> P1 high-side switch) ================= -->
+  <!-- ================= Lane A: Green TX (GP0 -> Q1 pre-driver -> P1 high-side switch -> R_clamp/D1 clamp) ================= -->
   <!-- Revision: bench testing found Green idles at 0V and real keypads
        pull it UP to transmit (confirmed with our device fully
        disconnected from the bus): the opposite polarity from what was
@@ -116,10 +118,23 @@
        instead. P1's gate can't be driven directly from 3.3V logic
        referenced to a 12V source, so Q1 (a simple 2N2222, reusing the
        exact base-drive circuit already proven correct all session) acts
-       as a level-shifting pre-driver: GP1 high pulls Q1's collector (and
+       as a level-shifting pre-driver: GP0 high pulls Q1's collector (and
        P1's gate) down near 0V, giving P1 a strongly negative Vgs and
-       turning it on; GP1 low lets the 10k pull-up hold P1's gate at
-       +12V, Vgs=0, off. -->
+       turning it on; GP0 low lets the 10k pull-up hold P1's gate at
+       +12V, Vgs=0, off. GP0 (not GP1): GP1 was the pin used during
+       bring-up but was later found dead (like GP27 before it) and moved
+       to GP0; see HARDWARE_ARCHITECTURE.md. -->
+  <!-- Revision 2: with P1 driving straight from AUX, Green peaked at
+       ~14.2V (scope-confirmed, cursor measurement), while a real
+       keypad's own key-send peaks at only ~11.7V on the same bus, same
+       reference, measured the same way. That ~2.5V gap was never
+       noticed as significant until every other candidate (checksum, bit
+       polarity, framing, batching, ack mechanism, response timing) had
+       already been individually verified correct or matched against a
+       real keypad's own captured bytes; at which point an output
+       voltage well above what any real keypad ever produces became the
+       most concrete remaining difference. R_clamp + D1 below hold P1's output
+       to roughly a real keypad's own range instead of the raw AUX rail. -->
   <line x1="380" y1="150" x2="450" y2="150" stroke="#1e7d32" stroke-width="3" marker-end="url(#arrowGreen)"/>
 
   <g stroke="#222" stroke-width="2" fill="none">
@@ -178,8 +193,54 @@
   <text x="695" y="152" font-size="11" fill="#555">source</text>
   <text x="635" y="120" font-size="10.5" fill="#555" text-anchor="middle">gate</text>
 
-  <!-- P1 drain -> GREEN bus, all the way to the panel terminal -->
-  <line x1="680" y1="70" x2="1250" y2="70" stroke="#1e7d32" stroke-width="2.5" marker-end="url(#arrowGreen)"/>
+  <!-- P1 drain -> R_clamp -> clamped Green node. R_clamp (330 ohm) and D1
+       (11V zener, shunt to GND) hold this node to roughly a real
+       keypad's own ~11.7V output instead of P1 sourcing the raw ~14V AUX
+       rail straight onto the bus; see the Revision 2 note above Lane A.
+       Sized against the bench-measured AUX rail (~14V): normal operation
+       drops ~3V across R_clamp into D1 (~9mA, well inside a 1W zener's
+       rating); a dead short on Green drops the full AUX rail across
+       R_clamp (~14V/330 ohm =~42mA, ~0.6W, inside a 1W resistor's
+       rating with real margin). Both parts should be 1W: this is a
+       field-bench fix, not a production design, and the margin is cheap
+       insurance against a shorted bus. -->
+  <line x1="680" y1="70" x2="742" y2="70" stroke="#1e7d32" stroke-width="2.5"/>
+  <g stroke="#222" stroke-width="2" fill="none">
+    <polyline points="680,70 690,58 702,82 714,58 726,82 738,58 742,70"/>
+  </g>
+  <text x="710" y="44" font-size="12" text-anchor="middle" fill="#222" font-weight="bold">R_clamp</text>
+  <text x="710" y="98" font-size="11" text-anchor="middle" fill="#555">330&#937; 1W</text>
+
+  <line x1="742" y1="70" x2="760" y2="70" stroke="#1e7d32" stroke-width="2.5"/>
+  <circle cx="760" cy="70" r="4.5" fill="#1e7d32"/>
+
+  <!-- D1: zener, cathode (bar, top) at the clamped Green node, anode
+       (triangle apex, bottom) to GND. Conducts in reverse breakdown when
+       the node tries to rise above ~11V, clamping it there and sinking
+       the rest of P1's drive current to GND through the branch below;
+       the opposite of a normal diode's forward-conduction orientation,
+       which is what makes this a voltage clamp rather than a rectifier. -->
+  <line x1="760" y1="70" x2="760" y2="190" stroke="#1e7d32" stroke-width="2"/>
+  <line x1="748" y1="190" x2="772" y2="190" stroke="#222" stroke-width="2.5"/>
+  <line x1="748" y1="190" x2="743" y2="184" stroke="#222" stroke-width="2"/>
+  <line x1="772" y1="190" x2="777" y2="196" stroke="#222" stroke-width="2"/>
+  <polygon points="750,220 770,220 760,190" fill="none" stroke="#222" stroke-width="2"/>
+  <text x="790" y="185" font-size="12" fill="#222" font-weight="bold">D1</text>
+  <text x="790" y="200" font-size="11" fill="#555">11V zener</text>
+  <text x="790" y="214" font-size="11" fill="#555">(e.g. 1N4741A)</text>
+  <line x1="760" y1="220" x2="760" y2="345" stroke="#222" stroke-width="2"/>
+  <circle cx="760" cy="345" r="4.5" fill="#222"/>
+  <text x="765" y="240" font-size="10" fill="#555">crosses the AUX rail line below</text>
+  <text x="765" y="252" font-size="10" fill="#555">(y=135) without connecting to it --</text>
+  <text x="765" y="264" font-size="10" fill="#555">no junction dot there</text>
+
+  <!-- clamped Green node -> monitor tap junction -> GREEN bus, all the
+       way to the panel terminal. Both the panel and our own GP28
+       monitor tap read this clamped node, same as they'd both read the
+       same real physical Green wire on the bench; see the monitor
+       tap's own rewiring below (Lane B). -->
+  <line x1="760" y1="70" x2="1250" y2="70" stroke="#1e7d32" stroke-width="2.5" marker-end="url(#arrowGreen)"/>
+  <circle cx="800" cy="70" r="4.5" fill="#1e7d32"/>
 
   <!-- +12V AUX rail (RED): feeds P1's source and the pull-up, routed to
        the panel's RED terminal below Green's own row so the two never
@@ -217,8 +278,13 @@
     <polyline points="500,460 508,448 492,436 508,424 500,412"/>
   </g>
   <text x="516" y="440" font-size="11" text-anchor="start" fill="#555">33k&#937;</text>
-  <line x1="500" y1="412" x2="500" y2="70" stroke="#1e7d32" stroke-width="2"/>
-  <line x1="500" y1="70" x2="1250" y2="70" stroke="#1e7d32" stroke-width="2" marker-end="url(#arrowGreen)"/>
+  <!-- Jogs right to x=800 to join the Green rail on the clamped side of
+       R_clamp/D1 (see Lane A), not directly at P1's raw drain output;
+       this tap needs to read the same clamped voltage the panel itself
+       sees, same as it would tap the same real physical Green wire on
+       the actual bench build. -->
+  <line x1="500" y1="412" x2="800" y2="412" stroke="#1e7d32" stroke-width="2"/>
+  <line x1="800" y1="412" x2="800" y2="70" stroke="#1e7d32" stroke-width="2"/>
   <!-- R_bottom (10k), node -> down to GND bus. Colored black/GND here,
        not green: this end of the divider returns to ground, not Green. -->
   <g stroke="#222" stroke-width="2" fill="none">
@@ -283,7 +349,7 @@
     <text x="60" y="740" font-weight="bold" fill="#111">Legend</text>
 
     <line x1="60" y1="758" x2="100" y2="758" stroke="#1e7d32" stroke-width="2.5"/>
-    <text x="108" y="762" fill="#1e7d32">Green wire &#8212; TX path (GP1&#8594;Q1&#8594;P1) + GP28 monitor tap (Panel GREEN)</text>
+    <text x="108" y="762" fill="#1e7d32">Green wire &#8212; TX path (GP0&#8594;Q1&#8594;P1&#8594;R_clamp/D1) + GP28 monitor tap (Panel GREEN)</text>
 
     <line x1="580" y1="758" x2="620" y2="758" stroke="#c8952a" stroke-width="2.5"/>
     <text x="628" y="762" fill="#a3781f">Yellow wire &#8212; GP26 RX divider (Panel YELLOW)</text>

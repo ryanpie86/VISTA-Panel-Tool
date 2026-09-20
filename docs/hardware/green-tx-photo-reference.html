@@ -25,13 +25,13 @@
 </head>
 <body>
 
-  <div class="title">RP2040-Zero to Vista-20P bus interface: physical parts &amp; wiring reference (v2)</div>
+  <div class="title">RP2040-Zero to Vista-20P bus interface: physical parts &amp; wiring reference (v3)</div>
   <div class="subtitle">Wires are drawn on top of the photos and terminate at the actual photographed leads/pins/screws -- not at photo edges. Generic stock photos stand in for the TO-92/TO-220/axial packages; the RP2040-Zero and Vista-20P photos are the real board layouts (straightened for clarity). Wire colors here match the ECP bus's real physical wire colors (Green/Yellow/Red/Black) -- green-tx-schematic.svg uses different, schematic-convention colors instead.</div>
 
   <!-- ===== Photos (drawn first, wires layer on top of them) ===== -->
 
   <img class="part" src="photos/rp2040-zero.jpg" style="left:60px; top:150px; width:480px; height:498px;">
-  <div class="label" style="left:60px; top:70px; width:480px;"><b>RP2040-Zero (Waveshare)</b><br>GP1=Green TX &middot; GP26=Yellow RX &middot; GP28=Green monitor &middot; GND</div>
+  <div class="label" style="left:60px; top:70px; width:480px;"><b>RP2040-Zero (Waveshare)</b><br>GP0=Green TX &middot; GP26=Yellow RX &middot; GP28=Green monitor &middot; GND</div>
 
   <img class="part" src="photos/resistor.jpg" style="left:300px; top:187px; width:200px; height:33.6px;">
   <div class="label" style="left:300px; top:225px; width:200px;"><b>R_B &mdash; 1k&#937;</b></div>
@@ -44,6 +44,9 @@
 
   <img class="part" src="photos/to220-mosfet.jpg" style="left:830px; top:259px; width:300px; height:199.8px;">
   <div class="label" style="left:825px; top:195px; width:350px;"><b>P1 &mdash; IRF4905 (TO-220)</b><br>leg tips left to right: Gate &middot; Drain &middot; Source. Metal tab = Drain.</div>
+
+  <div class="label" style="left:1010px; top:80px; width:170px; text-align:left;"><b>R_clamp</b> &mdash; 330&#937; 1W</div>
+  <div class="label" style="left:1010px; top:105px; width:170px; text-align:left;"><b>D1</b> &mdash; 11V zener 1W<br>(e.g. 1N4741A)</div>
 
   <img class="part" src="photos/vista20p-terminals.jpg" style="left:1200px; top:150px; width:450px; height:291.2px;">
   <div class="label" style="left:1200px; top:70px; width:450px;"><b>Vista-20P terminal strip</b><br>Term 4=BLACK(GND) &middot; 5=RED(+12V AUX) &middot; 6=GREEN(data) &middot; 7=YELLOW(data)</div>
@@ -76,10 +79,39 @@
     <path d="M 980,412.6 L 980,130" stroke="#1e7d32" stroke-width="2.75" fill="none"/>
     <path d="M 307.5,554.1 L 307.5,660 L 550,660" stroke="#1e7d32" stroke-width="2.75" fill="none" marker-end="url(#aGreen)"/>
     <path d="M 550,620 L 550,800" stroke="#1e7d32" stroke-width="2.75" fill="none"/>
-    <path d="M 750,620 L 750,130" stroke="#1e7d32" stroke-width="2.75" fill="none"/>
-    <path d="M 750,130 L 1443.6,130" stroke="#1e7d32" stroke-width="2.75" fill="none"/>
-    <circle cx="750" cy="130" r="4.5" fill="#1e7d32"/>
+    <!-- 33k resistor's far lead (GP28 monitor divider's own "Green bus"
+         input) jogs right to join the rail at x=1160, on the clamped
+         side of R_clamp/D1 below; it needs to read the same clamped
+         voltage the panel itself sees, same as it would tap the same
+         real physical Green wire on the actual bench build (same fix as
+         green-tx-schematic.svg's Lane B). -->
+    <path d="M 750,620 L 750,596 L 1160,596 L 1160,130" stroke="#1e7d32" stroke-width="2.75" fill="none"/>
     <circle cx="980" cy="130" r="4.5" fill="#1e7d32"/>
+
+    <!-- R_clamp + D1: no stock photo for a zener, so drawn as plain
+         schematic symbols here rather than a photo -- see
+         green-tx-schematic.svg for the authoritative version. Kept at
+         x<1195 (the Vista-20P terminal photo starts at x=1200) so
+         nothing here overlaps it. Clamps P1's drain (raw AUX rail, ~14V
+         measured) down to roughly a real keypad's own output (~11.7V
+         measured) before Green reaches the panel; see
+         HARDWARE_ARCHITECTURE.md "Still open" item 1 for why. -->
+    <path d="M 1132,130 L 1138,120 L 1146,140 L 1154,120 L 1160,130" stroke="#222" stroke-width="2" fill="none"/>
+    <circle cx="1160" cy="130" r="4.5" fill="#1e7d32"/>
+    <path d="M 1160,130 L 1160,144" stroke="#1e7d32" stroke-width="2" fill="none"/>
+    <path d="M 1150,144 L 1170,144" stroke="#222" stroke-width="2.5" fill="none"/>
+    <path d="M 1150,144 L 1146,138" stroke="#222" stroke-width="2" fill="none"/>
+    <path d="M 1170,144 L 1174,150" stroke="#222" stroke-width="2" fill="none"/>
+    <path d="M 1151,161 L 1169,161 L 1160,144 Z" stroke="#222" stroke-width="2" fill="none"/>
+    <!-- Plain wire from here to GND -- the diode symbol itself stays
+         above y=161, clear of the gold Yellow-wire crossing at y=175
+         below (no junction dot there, see the note above Lane A in the
+         schematic for the same convention). -->
+    <path d="M 1160,161 L 1160,700" stroke="#222" stroke-width="2" fill="none"/>
+    <circle cx="1160" cy="700" r="4.5" fill="#222"/>
+
+    <path d="M 1160,130 L 1443.6,130" stroke="#1e7d32" stroke-width="2.75" fill="none"/>
+    <circle cx="1443.6" cy="130" r="4.5" fill="#1e7d32"/>
     <path d="M 1443.6,130 L 1443.6,295.6" stroke="#1e7d32" stroke-width="2.75" fill="none" marker-end="url(#aGreen)"/>
 
     <!-- Red: +12V AUX rail (Panel RED) -->
@@ -113,7 +145,7 @@
   </svg>
 
   <div class="legend">
-    <span class="row"><span class="swatch" style="background:#1e7d32;"></span>Green wire &mdash; TX path (Q1&rarr;P1) + GP28 monitor tap (Panel term 6)</span>
+    <span class="row"><span class="swatch" style="background:#1e7d32;"></span>Green wire &mdash; TX path (Q1&rarr;P1&rarr;R_clamp/D1) + GP28 monitor tap (Panel term 6)</span>
     <span class="row"><span class="swatch" style="background:#a3781f;"></span>Yellow wire &mdash; GP26 RX divider (Panel term 7)</span>
     <span class="row"><span class="swatch" style="background:#b5391f;"></span>Red wire &mdash; +12V AUX (Panel term 5)</span>
     <span class="row"><span class="swatch" style="background:#222;"></span>Black wire &mdash; GND bus (Panel term 4)</span>

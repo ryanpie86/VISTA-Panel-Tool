@@ -128,11 +128,11 @@ after GP1 was also found dead. GP1 itself is now unused.
 
 ### Complete bus interface schematic
 
-![RP2040-Zero to Vista-20P bus interface schematic: board silhouette (pin layout matching the Waveshare pinout reference photo) showing all circuits -- Green TX (GP1 through a 1kΩ base resistor to Q1, a 2N2222 NPN pre-driver, whose collector drives P1's gate through a 10kΩ pull-up to a new +12V AUX rail; P1, an IRF4905 P-channel MOSFET, sources current from that same AUX rail onto Green through its drain when Q1 pulls its gate low), the Green bus-monitor divider (GP28, 33k/10k), and the Yellow RX divider (GP26, 39k/10k) -- plus a shared GND bus tying the physical GND pin, Q1's emitter, and both dividers to the panel's GND terminal, and the Vista-20P's own 4-terminal bus block (GREEN, RED now wired as the +12V AUX source, BLACK, YELLOW) on the right](docs/hardware/green-tx-schematic.jpg)
+![RP2040-Zero to Vista-20P bus interface schematic: board silhouette (pin layout matching the Waveshare pinout reference photo) showing all circuits -- Green TX (GP0 through a 1kΩ base resistor to Q1, a 2N2222 NPN pre-driver, whose collector drives P1's gate through a 10kΩ pull-up to a new +12V AUX rail; P1, an IRF4905 P-channel MOSFET, sources current from that same AUX rail onto Green through its drain when Q1 pulls its gate low, through a 330Ω series resistor and an 11V zener shunt to GND that clamp Green's peak to roughly a real keypad's own output level instead of the raw AUX rail), the Green bus-monitor divider (GP28, 33k/10k, tapping the clamped side of that same node), and the Yellow RX divider (GP26, 39k/10k) -- plus a shared GND bus tying the physical GND pin, Q1's emitter, and both dividers to the panel's GND terminal, and the Vista-20P's own 4-terminal bus block (GREEN, RED now wired as the +12V AUX source, BLACK, YELLOW) on the right](docs/hardware/green-tx-schematic.jpg)
 
 (Source vector version: `docs/hardware/green-tx-schematic.svg`, same content.)
 
-Board silhouette and pin positions (GND/GP1 on the top board, GP26/GP27/
+Board silhouette and pin positions (GND/GP0 on the top board, GP26/GP27/
 GP28 further down the left column) match the Waveshare RP2040-Zero's own
 pinout reference photo. The board also breaks GND out again on its
 underside pin group (same net) — either GND pad works for the panel tie.
@@ -160,13 +160,26 @@ doesn't show visually:
   driving an idle-low line any higher, which is why neither of those
   earlier designs ever produced an effect on the bus. P1 instead sources
   current onto Green from the new +12V AUX rail; since P1's source sits
-  at +12V rather than GND, GP1 can't drive its gate directly (both logic
+  at +12V rather than GND, GP0 can't drive its gate directly (both logic
   levels would leave Vgs strongly negative), so Q1 acts as an
-  open-collector level shifter: GP1 high pulls Q1's collector (P1's gate)
-  down near 0V, giving P1 a strongly negative Vgs and turning it on; GP1
+  open-collector level shifter: GP0 high pulls Q1's collector (P1's gate)
+  down near 0V, giving P1 a strongly negative Vgs and turning it on; GP0
   low lets the 10kΩ pull-up hold P1's gate at +12V, Vgs=0, off. See
   "Still open" item 1 for the full story of why the low-side approach was
   abandoned after this was discovered.
+- **P1's drain doesn't drive Green straight from the raw AUX rail.**
+  Driving Green directly from P1's drain peaked at ~14.2V on scope
+  (cursor measurement) — a real keypad's own key-send peaks at only
+  ~11.7V on the same bus, measured the same way, same reference. That
+  gap was invisible from this project's own local measurements (always
+  referenced to this board's own ground) and only showed up once a real
+  keypad and this device were scoped side by side sending the same key.
+  A 330Ω series resistor (R_clamp) into an 11V zener (D1, shunt to GND)
+  now hold Green's peak to roughly what a real keypad itself produces
+  instead of the bare AUX rail — see "Still open" item 1's voltage-clamp
+  update for the full story, including why every other candidate
+  (checksum, bit polarity, framing, batching, ack mechanism, response
+  timing) was ruled out first.
 
 ### Physical parts & wiring photo reference
 
@@ -630,6 +643,43 @@ Vista panel keypad bus (4-wire ECP)
    the pin table above), which was already free. Physical wiring must move
    the 1kΩ base resistor's input lead from GP1 to GP0 to match. Live retest
    against the real panel on GP0 pending.
+
+   **Update (GP0 confirmed live, full high-side chain scope-verified, panel
+   still not accepting key data -- root cause found: Green's peak voltage):**
+   GP0 confirmed live and correctly toggling at the header; the signal
+   survives R_B to Q1's base with correct clamped diode behavior; node A
+   (Q1 collector/P1 gate) swings correctly between ~13.8V idle and ~0V in
+   sync with drive pulses; Green itself pulses correctly from ~0V idle up
+   to AUX rail voltage in sync. The whole redesigned high-side circuit is
+   electrically sound. Several non-hardware hypotheses were tested and
+   ruled out along the way: an `invertTx=false` firmware change (wrong —
+   flipped GP0's *idle* level to HIGH, which drove Green to the AUX rail
+   continuously from power-on and froze a real keypad on the same bus;
+   reverted); a `VISTA_FILTER_OWN_TX` interrupt-safety change (also
+   reverted -- didn't cause the freeze, but wasn't the fix either); batching
+   every queued key into one multi-byte ECP frame vs. one frame per key,
+   matching real keypad traffic exactly (`send_keys.py --one-at-a-time`,
+   no difference); and a ~2.5ms delay before responding to the panel's
+   invite, to match a real keypad's own measured response latency (no
+   difference). Checksum algorithm and bit polarity were independently
+   verified correct against real keypad frames captured off the bus.
+
+   The actual difference, found by scoping a real keypad's own key-send
+   and this device's key-send side by side on the same bus, same
+   reference, same cursor measurement: a real keypad peaks at ~11.7V:
+   this device, sourcing Green directly from P1's drain, peaks at
+   ~14.2V (the raw AUX rail). A ~2.5V gap invisible to any of this
+   project's own local scope work (always referenced to this board's own
+   ground) until measured directly against a real keypad. **Fix: R_clamp
+   (330Ω) + D1 (11V zener, shunt to GND) added between P1's drain and
+   Green**, clamping this device's output to roughly a real keypad's own
+   range instead of the bare AUX rail — see the "Complete bus interface
+   schematic" above for the current circuit. Sized against the
+   bench-measured ~14V AUX rail: normal operation drops ~3V across
+   R_clamp into D1 (~9mA); a dead short on Green drops the full AUX rail
+   across R_clamp (~14V/330Ω ≈ 42mA, ~0.6W) — both parts specified at 1W
+   for real margin against that fault case. **Pending: physical build and
+   live retest against the real panel.**
 2. **Battery capacity** — deliberately left undecided, and not needed
    during the development/testing phase — the build will run on isolated
    wall power (via the isolated USB-C/DC-DC charge path already in the
