@@ -191,7 +191,23 @@ void setup() {
 #endif
 
   Serial.println("BOOT: calling vista.begin()");
-  vista.begin(PIN_YELLOW_RX, PIN_GREEN_TX, (char)KEYPAD_ADDR, PIN_GREEN_MON);
+  // invertTx (6th arg) explicitly false here, overriding Vista::begin()'s
+  // own default of true. That default was calibrated for a low-side TX
+  // stage on a Green wire assumed to idle HIGH (this project's own
+  // original, since-disproven assumption -- see HARDWARE_ARCHITECTURE.md
+  // "Still open" item 1). This build's Q1/P1 high-side stage drives GP1
+  // high -> Green high directly (confirmed on scope: node A and P1's
+  // drain both swing exactly as designed), the opposite relationship the
+  // default invertTx=true assumes. Left at the default, every real data
+  // bit maps onto the wire backwards: framing/timing still look clean
+  // (inversion doesn't touch those), but the byte content -- and thus
+  // every checksum the panel computes -- comes out wrong, so it silently
+  // drops the frame instead of NAKing it. invertRx (5th arg) stays true;
+  // Yellow's own idle-high polarity was never in question and hasn't
+  // changed. invertMon (7th arg, GP28) stays at its default too -- see
+  // HARDWARE_ARCHITECTURE.md, the monitor tap's own full-frame decode was
+  // never hardened/relied on, only its raw edge trace (GREENEDGE) was.
+  vista.begin(PIN_YELLOW_RX, PIN_GREEN_TX, (char)KEYPAD_ADDR, PIN_GREEN_MON, true, false);
   Serial.println("BOOT: vista.begin() returned, entering loop()");
 }
 
