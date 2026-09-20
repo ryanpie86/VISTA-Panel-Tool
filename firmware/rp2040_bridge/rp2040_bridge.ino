@@ -191,23 +191,31 @@ void setup() {
 #endif
 
   Serial.println("BOOT: calling vista.begin()");
-  // invertTx (6th arg) explicitly false here, overriding Vista::begin()'s
-  // own default of true. That default was calibrated for a low-side TX
-  // stage on a Green wire assumed to idle HIGH (this project's own
-  // original, since-disproven assumption -- see HARDWARE_ARCHITECTURE.md
-  // "Still open" item 1). This build's Q1/P1 high-side stage drives GP1
-  // high -> Green high directly (confirmed on scope: node A and P1's
-  // drain both swing exactly as designed), the opposite relationship the
-  // default invertTx=true assumes. Left at the default, every real data
-  // bit maps onto the wire backwards: framing/timing still look clean
-  // (inversion doesn't touch those), but the byte content -- and thus
-  // every checksum the panel computes -- comes out wrong, so it silently
-  // drops the frame instead of NAKing it. invertRx (5th arg) stays true;
-  // Yellow's own idle-high polarity was never in question and hasn't
-  // changed. invertMon (7th arg, GP28) stays at its default too -- see
-  // HARDWARE_ARCHITECTURE.md, the monitor tap's own full-frame decode was
-  // never hardened/relied on, only its raw edge trace (GREENEDGE) was.
-  vista.begin(PIN_YELLOW_RX, PIN_GREEN_TX, (char)KEYPAD_ADDR, PIN_GREEN_MON, true, false);
+  // invertTx (6th arg) at Vista::begin()'s own default (true) -- a
+  // previous version of this line explicitly overrode it to false based
+  // on a manual, unverified derivation of bit-content polarity, and that
+  // caused a real bench regression: SoftwareSerial's idle level is
+  // !invertTx (ECPSoftwareSerial.cpp write()/begin()), so invertTx=false
+  // makes GP0 idle HIGH -- and this build's Q1/P1 high-side stage is
+  // non-inverting (GP0 high -> Q1 on -> node A low -> P1 gate low -> P1
+  // sources onto Green), so an idle-HIGH GP0 drives Green to the full
+  // +12V AUX rail continuously from the moment vista.begin() returns,
+  // independent of whether we ever transmit. That jams the shared bus
+  // for every device on it, not just ours -- confirmed on the bench as a
+  // real physical keypad locking up as soon as the bridge powered on.
+  // invertTx=true (this default) makes GP0 idle LOW -> Green idle LOW,
+  // which is the electrically-correct, scope-verified idle/pulse
+  // behavior this circuit was built and validated against (node A and
+  // P1's drain both swing correctly, Green pulses UP from ~0V idle during
+  // TX) -- that validation was done under this same default, before the
+  // invertTx=false detour. Don't reintroduce invertTx=false without a
+  // real keypad wired to the bus to catch this failure mode again.
+  // invertRx (5th arg) stays true; Yellow's own idle-high polarity was
+  // never in question and hasn't changed. invertMon (7th arg, GP28) stays
+  // at its default too -- see HARDWARE_ARCHITECTURE.md, the monitor tap's
+  // own full-frame decode was never hardened/relied on, only its raw edge
+  // trace (GREENEDGE) was.
+  vista.begin(PIN_YELLOW_RX, PIN_GREEN_TX, (char)KEYPAD_ADDR, PIN_GREEN_MON, true, true);
   Serial.println("BOOT: vista.begin() returned, entering loop()");
 }
 
