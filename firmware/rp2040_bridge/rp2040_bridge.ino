@@ -51,17 +51,18 @@
 // ---- Pin configuration -------------------------------------------------
 // See HARDWARE_ARCHITECTURE.md "Bus coprocessor: RP2040-Zero" pin table.
 static const int PIN_YELLOW_RX = 26;  // Yellow (panel "data out") -> 39k/10k divider -> GP26
-// Green TX was originally GP27, per HARDWARE_ARCHITECTURE.md's pin table --
-// moved to GP1 after bench testing (debugForceKeyAnnounce() + scope) showed
-// GP27 never produces a signal even fully isolated from the 1k/Q1 base
-// circuit (R_B lifted), while the identical forced-announce burst comes out
-// clean and correctly shaped on GP1. That isolates the fault to GP27's GPIO
-// driver on this specific RP2040, not the firmware, the ECP library, or the
-// transistor/divider wiring. GP1 was free (see HARDWARE_ARCHITECTURE.md --
-// originally earmarked for an abandoned UART0 interconnect plan, never
-// wired to anything). Physical wiring must move the 1k base resistor's
-// input lead from GP27 to GP1 to match.
-static const int PIN_GREEN_TX = 1;    // GP1 -> 1k base resistor -> 2N2222 -> Green ("data in from keypad")
+// Green TX was originally GP27, then GP1 -- now GP0. Same failure pattern
+// both times: bench testing on the high-side Q1/P1 rebuild found
+// keySendAddrAnnounced incrementing on every send (confirming vistaSerial->
+// write() executed, i.e. firmware believes it drove the pin) with zero
+// pulses ever observed on GP1 itself, on a scope in Normal trigger mode
+// directly at the MCU pin -- same "firmware thinks it wrote, pin never
+// moves" signature that isolated GP27 as a dead GPIO driver on this exact
+// chip earlier in the project. GP0 was free (originally earmarked for an
+// abandoned UART0 interconnect plan, never wired to anything). Physical
+// wiring must move the 1k base resistor's input lead from GP1 to GP0 to
+// match.
+static const int PIN_GREEN_TX = 0;    // GP0 -> 1k base resistor -> 2N2222 -> Green ("data in from keypad")
 static const int PIN_GREEN_MON = 28;  // Green bus-monitor tap -> 33k/10k divider -> GP28
 static const int PIN_STATUS_LED = 16; // Onboard WS2812, hardwired -- nothing to wire
 

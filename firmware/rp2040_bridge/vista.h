@@ -295,8 +295,10 @@ public:
     // all on GP27 (the pin originally assigned to this signal) across many
     // forced-announce attempts, but caught a clean, correctly bit-shaped
     // burst on GP1 with the identical firmware -- pointing to a dead GP27
-    // GPIO driver, not a protocol or timing bug. Green TX now lives on GP1
-    // (see HARDWARE_ARCHITECTURE.md's pin table).
+    // GPIO driver, not a protocol or timing bug. The same signature
+    // (write() executing, zero pulses on the pin) later isolated GP1 itself
+    // as dead too; Green TX now lives on GP0 -- see the .ino sketch's pin
+    // table comment and HARDWARE_ARCHITECTURE.md for the current pin.
     void debugForceKeyAnnounce();
 
     // std::queue<struct cmdQueueItem> cmdQueue;
