@@ -38,22 +38,21 @@
 #define ARDUINO_MQTT
 #endif
 
-// VISTA_FILTER_OWN_TX gates Vista::_filterOwnTx (see the Vista::Vista()
-// constructor), which in turn gates two things in sendBuffer()/write():
-// tracking our own sent bytes into _extbuf for self-echo filtering, and
-// -- the one that actually matters here -- whether write() disables
-// interrupts while it bit-bangs a byte out (write(..., interrupt) calls
-// disableInterrupts() only if interrupt is true, and sendBuffer() passes
-// _filterOwnTx straight through as that argument). Left undefined (the
-// upstream default), our own key-data TX runs with interrupts fully
-// enabled: Yellow's RX ISR (rxHandleISR(), firing on every edge of a
-// genuinely busy line) can preempt an in-progress writeChars() call at
-// any point, and in some paths that ISR does its own vistaSerial->write()
-// on the exact same Green pin -- a real re-entrancy hazard, not just
-// timing jitter, since both write()s toggle the same physical pin.
-// Defined here (not the .ino -- same reason as ARDUINO_MQTT above) so
-// our own TX is atomic with respect to Yellow's interrupt.
-#define VISTA_FILTER_OWN_TX
+// VISTA_FILTER_OWN_TX previously defined here to gate Vista::_filterOwnTx,
+// making write() disable interrupts (SoftwareSerial::disableInterrupts(),
+// ECPSoftwareSerial.cpp) around each bit-banged byte of our own TX. That
+// change (see git history) caused a real bench regression: the physical
+// keypad locked up as soon as the RP2040 bridge was powered on and wired
+// to the bus -- consistent with our device jamming the shared Green line
+// while stuck in (or repeatedly re-entering) that interrupt-disabled
+// section, which would freeze bus arbitration for every device on it, not
+// just ours. SoftwareSerial::m_savedPS (ECPSoftwareSerial.h/.cpp), the
+// storage disableInterrupts()/restoreInterrupts() save/restore the
+// previous interrupt state into, is a single static field rather than
+// something safe under reentrant/nested calls -- a real suspect for how
+// this could wedge, though not confirmed on hardware yet. Left undefined
+// (the upstream default, and what this file shipped before that change)
+// until the actual mechanism is understood and fixed.
 // -------------------------------------------------------------------------
 
 #if not defined(USE_ESP_IDF)
