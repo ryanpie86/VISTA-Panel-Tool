@@ -1,26 +1,28 @@
 """Send a sequence of ECP keypresses to the RP2040 bridge, bench-testing tool.
 
-Sending keys one at a time -- whether by hand (pasting a `KEY,<partition>,
-<char>` serial command per key) or by waiting for each key's own ACK before
-sending the next -- is bench-confirmed too slow for a multi-digit sequence
-like an installer code: each ACK only confirms the RP2040 transmitted that
-key during a real poll of its keypad address, which still costs a full USB
-round trip plus a wait for the next bus poll cycle, every single time. Chain
-enough of those and the panel's own inter-digit code-entry timeout resets
-before the sequence finishes, even though every individual key transmitted
-and acked just fine on its own.
+By default this sends the whole key sequence as ONE `KEY,<partition>,<keys>`
+command (see firmware/SERIAL_PROTOCOL.md) via RP2040SerialTransport.send_keys().
+The firmware queues every key immediately, and Vista::writeChars() batches
+everything still queued at send time into a single multi-byte ECP frame
+(header, length, all data bytes, one checksum) rather than one frame per key.
 
-This sends the whole key sequence as ONE `KEY,<partition>,<keys>` command
-(see firmware/SERIAL_PROTOCOL.md) via RP2040SerialTransport.send_keys().
-The firmware queues every key immediately into the underlying ECP library's
-own outbound buffer, and the panel's real poll cycle drains it at native bus
-speed from there -- same as how a human pressing keys on a physical keypad
-only needs each press registered quickly, not a full bus-poll round trip
-before the next press.
+That batching was written to work around single-key sends being too slow
+for a multi-digit code -- but every real keypad frame captured off the bus
+so far (via scripts/log_serial.py, entering a code by hand) has length=2:
+real keypads never send more than one key per frame, ever, even for a fast
+multi-digit entry. Nothing has actually confirmed the panel accepts a
+batched multi-key frame; the original "too slow" finding predates fixes to
+two real bugs (an interrupt/re-entrancy issue and, much more seriously, a
+TX idle-level bug that held the bus jammed) that could easily have caused
+that conclusion on their own. --one-at-a-time tests the batching hypothesis
+directly: it sends each character as its own `KEY,<partition>,<char>`
+command in sequence, producing one length=2 frame per key, matching what a
+real keypad actually puts on the bus.
 
 Usage:
     python scripts/send_keys.py /dev/ttyACM0 4112800
     python scripts/send_keys.py /dev/ttyACM0 '*99' --partition 1
+    python scripts/send_keys.py /dev/ttyACM0 4112800 --one-at-a-time
 
 Prints the partition's display (DISP) text once the whole batch is
 confirmed sent (or once the ACK wait times out).
@@ -45,6 +47,12 @@ async def main() -> None:
     parser.add_argument("keys", help="Keys to send in order, e.g. 4112800 or '*99'")
     parser.add_argument("--partition", type=int, default=1)
     parser.add_argument("--baud", type=int, default=115200)
+    parser.add_argument(
+        "--one-at-a-time",
+        action="store_true",
+        help="Send each character as its own KEY command (one length=2 ECP frame per key, "
+        "matching real keypad traffic) instead of batching the whole string into one frame.",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -52,7 +60,12 @@ async def main() -> None:
     transport = RP2040SerialTransport(device=args.device, baud=args.baud)
     await transport.connect()
     try:
-        await transport.send_keys(args.partition, args.keys)
+        if args.one_at_a_time:
+            for key in args.keys:
+                print(f"--- sending {key!r} ---")
+                await transport.send_keys(args.partition, key)
+        else:
+            await transport.send_keys(args.partition, args.keys)
         # send_keys() returns as soon as the ACK line is processed, which
         # can race the DEBUG line the firmware sends right after it (and
         # any DISP update the panel broadcasts shortly after) -- give the
