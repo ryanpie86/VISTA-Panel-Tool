@@ -53,6 +53,9 @@
 // rxISRTrampolineRP2040() in vista.cpp.
 extern volatile uint32_t rxEdgeCountRP2040;
 extern volatile uint32_t txEdgeCountRP2040;
+// Last millis() timestamp the RX trampoline saw a raw edge on Yellow --
+// see the matching comment above its declaration in vista.cpp.
+extern volatile uint32_t rxLastEdgeMs;
 // Raw Green-wire edge-timing trace -- see the matching comment above its
 // declaration in vista.cpp. Shared size #define so the .ino sketch can
 // iterate the same ring buffer without hardcoding its length twice.

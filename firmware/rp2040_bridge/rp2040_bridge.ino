@@ -107,7 +107,6 @@ static uint32_t pendingAddrAnnouncedBefore = 0;
 static uint32_t pendingPendingAckTimeoutBefore = 0;
 static uint32_t pendingAddrDroppedBefore = 0;
 
-static bool lastKeybusConnected = false;
 static unsigned long lastBusFaultReportMs = 0;
 
 // vista.keybusConnected (upstream) is never actually set true anywhere in
@@ -115,25 +114,37 @@ static unsigned long lastBusFaultReportMs = 0;
 // grepping both the original esphome-components source and our vendored
 // copy. Track real bus activity ourselves instead.
 //
-// This originally fired on *any* decoded frame, including the catch-all
-// "other" (unrecognized opcode) bucket -- fine with the interrupt-driven
-// software bit sampler, which rarely survives long enough on pure noise
-// (e.g. GP26 floating with the panel powered off) to assemble a complete
-// frame. It was narrowed to *valid F7 only* during the PIO-RX experiment,
-// since PIO was bench-confirmed to happily frame ambient noise into a
-// steady stream of garbage "other" frames, keeping this permanently
-// "connected" with no panel attached at all -- a valid F7 needs a specific
-// 45-byte structure to pass its checksum, which noise essentially never
-// produces by chance. PIO RX is now disabled again (VISTA_RP2040_USE_PIO_RX
-// 0 in vista.h) in favor of the interrupt-driven decoder, so that noise-
-// framing risk is gone and the narrowing left this permanently reporting
-// "keybus not detected" on live bus traffic instead (bench-confirmed: F0/F6/
-// F8/F9/other frames decoding continuously while no F7 has yet passed
-// checksum, due to the still-open F7 truncation issue) -- reverted back to
-// any decoded frame, matching the decoder actually in use.
+// History: this was originally gated on a *decoded frame* having arrived
+// recently (first any decoded frame, briefly narrowed to valid-F7-only
+// during the PIO-RX experiment, then reverted -- see git history for that
+// back-and-forth). Bench feedback covering this project's whole history:
+// that's an unreliable way to detect "is the bus there" on a genuinely
+// quiet bus -- gaps between poll cycles (or a run of frames that don't
+// happen to pass checksum) routinely exceeded the timeout with a perfectly
+// healthy panel attached, flashing the LED red and logging ERR,keybus not
+// detected for no real reason. Split into two independent signals instead:
+//   - "connected" (LED red/green) now tracks raw edge activity on Yellow
+//     (rxLastEdgeMs, stamped on every GPIO change regardless of whether it
+//     ever becomes a decoded frame) -- see YELLOW_EDGE_TIMEOUT_MS below.
+//   - lastBusActivityMs/everSawBusActivity (still decoded-frame-based) now
+//     drive a separate purple LED pulse on each decoded frame instead --
+//     see FRAME_PULSE_MS below.
 static unsigned long lastBusActivityMs = 0;
 static bool everSawBusActivity = false;
-static const unsigned long BUS_ACTIVITY_TIMEOUT_MS = 3000;  // no decoded frame in 3s -> call it down
+static const unsigned long BUS_ACTIVITY_TIMEOUT_MS = 3000;  // non-RP2040 fallback only, see loop()
+// RP2040 build: how long without a raw Yellow edge before calling the bus
+// down. Bench-measured full poll-transaction period is ~663ms (see
+// HARDWARE_ARCHITECTURE.md "Still open" item 1); this gives comfortable
+// margin above that while staying far more responsive -- and far less
+// false-positive-prone -- than the old 3s decoded-frame timeout.
+static const unsigned long YELLOW_EDGE_TIMEOUT_MS = 1200;
+// How long the status LED shows purple after a decoded frame before
+// reverting to green -- a brief, visible pulse rather than staying purple
+// throughout an active burst.
+static const unsigned long FRAME_PULSE_MS = 150;
+
+enum LedState { LED_UNSET, LED_RED, LED_GREEN, LED_PURPLE };
+static LedState lastLedState = LED_UNSET;
 
 static void emitDisp(const statusFlagType &sf);
 static void handleSerialLine(const String &line);
@@ -405,10 +416,29 @@ void loop() {
     }
   }
 
+#if defined(ARDUINO_ARCH_RP2040)
+  // Raw edge activity, not decoded-frame activity -- see the comment above
+  // YELLOW_EDGE_TIMEOUT_MS for why. rxEdgeCountRP2040==0 guards against the
+  // brief window right after boot where rxLastEdgeMs is still its 0
+  // initializer, which would otherwise read as "just saw an edge".
+  bool connected = rxEdgeCountRP2040 > 0 && (millis() - rxLastEdgeMs < YELLOW_EDGE_TIMEOUT_MS);
+#else
+  // No raw-edge counter on non-RP2040 targets (see vista.cpp's USE_RP2040
+  // guard) -- fall back to the original decoded-frame heuristic.
   bool connected = everSawBusActivity && (millis() - lastBusActivityMs < BUS_ACTIVITY_TIMEOUT_MS);
-  if (connected != lastKeybusConnected) {
-    setStatusColor(connected ? 0 : 32, connected ? 32 : 0, 0);
-    lastKeybusConnected = connected;
+#endif
+  // Purple pulse: brief, on top of red/green, whenever a frame actually
+  // decodes -- same everSawBusActivity==0-at-boot guard as above.
+  bool framePulse = everSawBusActivity && (millis() - lastBusActivityMs < FRAME_PULSE_MS);
+  LedState desiredLed = framePulse ? LED_PURPLE : (connected ? LED_GREEN : LED_RED);
+  if (desiredLed != lastLedState) {
+    switch (desiredLed) {
+      case LED_RED:    setStatusColor(32, 0, 0);  break;
+      case LED_GREEN:  setStatusColor(0, 32, 0);  break;
+      case LED_PURPLE: setStatusColor(20, 0, 32); break;
+      default: break;
+    }
+    lastLedState = desiredLed;
   }
   if (!connected && millis() - lastBusFaultReportMs > BUS_FAULT_REPORT_MS) {
     sendLine("ERR,keybus not detected on GP" + String(PIN_YELLOW_RX));
