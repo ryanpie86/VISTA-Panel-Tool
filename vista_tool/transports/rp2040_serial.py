@@ -113,6 +113,17 @@ class RP2040SerialTransport(PushUpdatePollingTransport):
             # second raw serial connection fighting this one for the port.
             logger.info(line)
             return
+        if line.startswith("TXFRAME ") or line.startswith("EXPECTCHK "):
+            # Bench-only key-send echo diagnostics (see writeChars()/
+            # cmdAvail() comments in vista.cpp) -- same silent-discard gap
+            # as RAW/GREENRAW/GREENEDGE had before those were added.
+            # TXFRAME shows what byte cmdAvail() started watching for on
+            # each real key-data send; EXPECTCHK shows every byte it
+            # actually compared against that, match or not -- together
+            # they show whether the panel's echo is in the stream and just
+            # not matching, or never appears at all.
+            logger.info(line)
+            return
         # PONG or unrecognized -- ignore
 
     async def send_keys(self, partition: int, keys: str) -> None:
