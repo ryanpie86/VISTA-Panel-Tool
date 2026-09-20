@@ -40,6 +40,18 @@ void IRAM_ATTR txISRHandler(void* args)
 volatile uint32_t rxEdgeCountRP2040 = 0;
 volatile uint32_t txEdgeCountRP2040 = 0;
 
+// Bench feedback (VISTA-Panel-Tool): the "keybus not detected" status --
+// both the ERR line and the status LED -- was gated on a *decoded frame*
+// having arrived recently. That's been intermittently false-positive
+// throughout the project's history on a bus that's genuinely fine but just
+// quiet between poll cycles (or producing frames that don't happen to pass
+// checksum): "no frame decoded lately" isn't the same thing as "no bus
+// present". Raw edge timing is a much more honest signal -- any real bus
+// activity toggles Yellow constantly, decoded or not -- so track the last
+// time this trampoline actually saw one, independent of whether Vista's
+// state machine ever turns it into a frame.
+volatile uint32_t rxLastEdgeMs = 0;
+
 // Bench diagnostic: raw edge-timing trace for the Green wire, entirely
 // bypassing vistaSerialMonitor's own software-UART byte decode. That
 // decode is a second, independent instance of the exact same naive
@@ -96,6 +108,7 @@ volatile uint32_t keySendAddrDropped = 0;
 void IRAM_ATTR rxISRTrampolineRP2040()
 {
     rxEdgeCountRP2040++;
+    rxLastEdgeMs = millis();
     if (pointerToVistaClass != NULL)
         pointerToVistaClass->rxHandleISR();
 }
