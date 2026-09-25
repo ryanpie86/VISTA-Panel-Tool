@@ -81,12 +81,15 @@
     <path d="M 263,543 L 263,660 L 550,660" stroke="#1e7d32" stroke-width="2.75" fill="none" marker-end="url(#aGreen)"/>
     <path d="M 550,620 L 550,800" stroke="#1e7d32" stroke-width="2.75" fill="none"/>
     <!-- 33k resistor's far lead (GP28 monitor divider's own "Green bus"
-         input) jogs right to join the rail at x=1160, on the clamped
+         input) jogs right to join the rail at x=1180, on the clamped
          side of R_clamp/D1 below; it needs to read the same clamped
          voltage the panel itself sees, same as it would tap the same
          real physical Green wire on the actual bench build (same fix as
-         green-tx-schematic.svg's Lane B). -->
-    <path d="M 750,620 L 750,596 L 1160,596 L 1160,130" stroke="#1e7d32" stroke-width="2.75" fill="none"/>
+         green-tx-schematic.svg's Lane B). x=1180 clears D1's photo
+         (left:1148 width:24, so its right edge is at 1172) -- this
+         used to run straight down through the photo at x=1160. -->
+    <path d="M 750,620 L 750,596 L 1180,596 L 1180,130" stroke="#1e7d32" stroke-width="2.75" fill="none"/>
+    <circle cx="1180" cy="130" r="4.5" fill="#1e7d32"/>
     <circle cx="977" cy="130" r="4.5" fill="#1e7d32"/>
     <!-- Bridges P1's drain (dot above, x=977) to R_clamp's own start
          (x=1132) -- without this segment the drain wire just stops in
