@@ -6,7 +6,7 @@
   * { box-sizing: border-box; }
   body {
     margin: 0;
-    width: 1750px;
+    width: 1820px;
     height: 1000px;
     background: #ffffff;
     font-family: Helvetica, Arial, sans-serif;
@@ -20,7 +20,7 @@
   .legend { position: absolute; left: 30px; top: 930px; font-size: 13px; }
   .legend .row { display: inline-block; margin-right: 36px; }
   .legend .swatch { display: inline-block; width: 30px; height: 4px; vertical-align: middle; margin-right: 6px; }
-  svg.wires { position: absolute; left: 0; top: 0; width: 1750px; height: 1000px; pointer-events: none; }
+  svg.wires { position: absolute; left: 0; top: 0; width: 1820px; height: 1000px; pointer-events: none; }
 </style>
 </head>
 <body>
@@ -45,12 +45,13 @@
   <img class="part" src="photos/to220-mosfet.jpg" style="left:830px; top:259px; width:300px; height:199.8px;">
   <div class="label" style="left:825px; top:195px; width:315px;"><b>P1 &mdash; IRF4905 (TO-220)</b><br>leg tips left to right: Gate &middot; Drain &middot; Source. Metal tab = Drain.</div>
 
-  <div class="label" style="left:995px; top:65px; width:200px; text-align:left;"><b>R_clamp</b> &mdash; 330&#937; 1W</div>
-  <div class="label" style="left:995px; top:82px; width:200px; text-align:left;"><b>D1</b> &mdash; 11V zener (1N4741A)<br>cathode up (Green), anode down (GND)</div>
-  <img class="part" src="photos/diode.jpg" style="left:1152px; top:130px; width:24px; height:104px;">
+  <img class="part" src="photos/resistor.jpg" style="left:1132px; top:121.6px; width:100px; height:16.8px;">
+  <div class="label" style="left:1080px; top:65px; width:235px; text-align:left;"><b>R_clamp</b> &mdash; 330&#937; 1W</div>
+  <div class="label" style="left:1080px; top:82px; width:235px; text-align:left;"><b>D1</b> &mdash; 11V zener (1N4741A)<br>cathode up (Green), anode down (GND)</div>
+  <img class="part" src="photos/diode.jpg" style="left:1262px; top:130px; width:24px; height:104px;">
 
-  <img class="part" src="photos/vista20p-terminals.jpg" style="left:1200px; top:150px; width:450px; height:291.2px;">
-  <div class="label" style="left:1200px; top:70px; width:450px;"><b>Vista-20P terminal strip</b><br>Term 4=BLACK(GND) &middot; 5=RED(+12V AUX) &middot; 6=GREEN(data) &middot; 7=YELLOW(data)</div>
+  <img class="part" src="photos/vista20p-terminals.jpg" style="left:1320px; top:150px; width:450px; height:291.2px;">
+  <div class="label" style="left:1320px; top:70px; width:450px;"><b>Vista-20P terminal strip</b><br>Term 4=BLACK(GND) &middot; 5=RED(+12V AUX) &middot; 6=GREEN(data) &middot; 7=YELLOW(data)</div>
 
   <img class="part" src="photos/resistor.jpg" style="left:550px; top:603.2px; width:200px; height:33.6px;">
   <div class="label" style="left:550px; top:641px; width:200px;"><b>33k&#937;</b></div>
@@ -63,7 +64,7 @@
   <div class="label" style="left:850px; top:821px; width:220px;"><b>10k&#937;</b> &mdash; GP26 divider (Yellow RX)</div>
 
   <!-- ===== Wires (drawn ON TOP of photos, terminating exactly at leg/pin/screw pixels) ===== -->
-  <svg class="wires" viewBox="0 0 1750 1000">
+  <svg class="wires" viewBox="0 0 1820 1000">
     <defs>
       <marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#222"/></marker>
       <marker id="aGreen" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1e7d32"/></marker>
@@ -81,74 +82,77 @@
     <path d="M 263,543 L 263,660 L 550,660" stroke="#1e7d32" stroke-width="2.75" fill="none" marker-end="url(#aGreen)"/>
     <path d="M 550,620 L 550,800" stroke="#1e7d32" stroke-width="2.75" fill="none"/>
     <!-- 33k resistor's far lead (GP28 monitor divider's own "Green bus"
-         input) jogs right to join the rail at x=1180, on the clamped
+         input) jogs right to join the rail at x=1300, on the clamped
          side of R_clamp/D1 below; it needs to read the same clamped
          voltage the panel itself sees, same as it would tap the same
          real physical Green wire on the actual bench build (same fix as
-         green-tx-schematic.svg's Lane B). x=1180 clears D1's photo
-         (left:1152 width:24, so its right edge is at 1176) -- this
-         used to run straight down through the photo at x=1160. -->
-    <path d="M 750,620 L 750,596 L 1180,596 L 1180,130" stroke="#1e7d32" stroke-width="2.75" fill="none"/>
-    <circle cx="1180" cy="130" r="4.5" fill="#1e7d32"/>
+         green-tx-schematic.svg's Lane B). x=1300 clears D1's photo
+         (left:1262 width:24, so its right edge is at 1286). -->
+    <path d="M 750,620 L 750,596 L 1300,596 L 1300,130" stroke="#1e7d32" stroke-width="2.75" fill="none"/>
+    <circle cx="1300" cy="130" r="4.5" fill="#1e7d32"/>
     <circle cx="977" cy="130" r="4.5" fill="#1e7d32"/>
-    <!-- Bridges P1's drain (dot above, x=977) to R_clamp's own start
-         (x=1132) -- without this segment the drain wire just stops in
+    <!-- Bridges P1's drain (dot above, x=977) to R_clamp's own photo
+         (left:1132) -- without this segment the drain wire just stops in
          open space above P1, short of R_clamp/D1 entirely. -->
     <path d="M 977,130 L 1132,130" stroke="#1e7d32" stroke-width="2.75" fill="none"/>
 
-    <!-- R_clamp (drawn, no stock photo for the value) + D1 (real photo,
-         photos/diode.jpg, cathode/black-band end up toward Green -- see
-         the img tag above). Kept at x<1195 (the Vista-20P terminal
-         photo starts at x=1200) so nothing here overlaps it. Clamps
-         P1's drain (raw AUX rail, ~14V measured) down to roughly a real
-         keypad's own output (~11.7V measured) before Green reaches the
-         panel; see HARDWARE_ARCHITECTURE.md "Still open" item 1 for why. -->
-    <path d="M 1132,130 L 1138,120 L 1146,140 L 1154,120 L 1160,130" stroke="#222" stroke-width="2" fill="none"/>
-    <circle cx="1160" cy="130" r="4.5" fill="#1e7d32"/>
+    <!-- R_clamp: real resistor.jpg photo (same stand-in used for every
+         other resistor on this page), not a drawn schematic symbol.
+         Its leads span the image's own width (1132 to 1232), matching
+         how R_B/pull-up/divider resistors connect elsewhere on this
+         page. Stub from its right lead to D1's own photographed lead
+         (x=1270, see D1 below) + D1 (real photo, photos/diode.jpg,
+         cathode/black-band end up toward Green -- see the img tag
+         above). Kept well clear of the Vista-20P terminal photo
+         (left:1320). Clamps P1's drain (raw AUX rail, ~14V measured)
+         down to roughly a real keypad's own output (~11.7V measured)
+         before Green reaches the panel; see HARDWARE_ARCHITECTURE.md
+         "Still open" item 1 for why. -->
+    <path d="M 1232,130 L 1270,130" stroke="#1e7d32" stroke-width="2.75" fill="none"/>
+    <circle cx="1270" cy="130" r="4.5" fill="#1e7d32"/>
     <!-- D1's photo (top:130 to top:234) covers the gold Yellow-wire
          crossing at y=175 -- same as the green/red wires already
          crossing through Q1's and P1's own photos elsewhere on this
-         page, not a new kind of overlap. Bottom wire x=1160 matches
-         the photographed lead's actual pixel position at the image's
-         bottom edge (measured directly from photos/diode.jpg), not
-         just the image's own box center. -->
-    <path d="M 1160,234 L 1160,700" stroke="#222" stroke-width="2" fill="none"/>
-    <circle cx="1160" cy="700" r="4.5" fill="#222"/>
+         page, not a new kind of overlap. Wire x=1270 matches the
+         photographed lead's actual pixel position (measured directly
+         from photos/diode.jpg), not just the image's own box center. -->
+    <path d="M 1270,234 L 1270,700" stroke="#222" stroke-width="2" fill="none"/>
+    <circle cx="1270" cy="700" r="4.5" fill="#222"/>
 
-    <path d="M 1160,130 L 1443.6,130" stroke="#1e7d32" stroke-width="2.75" fill="none"/>
-    <circle cx="1443.6" cy="130" r="4.5" fill="#1e7d32"/>
-    <path d="M 1443.6,130 L 1443.6,295.6" stroke="#1e7d32" stroke-width="2.75" fill="none" marker-end="url(#aGreen)"/>
+    <path d="M 1270,130 L 1573.5,130" stroke="#1e7d32" stroke-width="2.75" fill="none"/>
+    <circle cx="1573.5" cy="130" r="4.5" fill="#1e7d32"/>
+    <path d="M 1573.5,130 L 1573.5,295.6" stroke="#1e7d32" stroke-width="2.75" fill="none" marker-end="url(#aGreen)"/>
 
     <!-- Red: +12V AUX rail (Panel RED) -->
     <path d="M 700,411.1 L 700,516.8" stroke="#b5391f" stroke-width="2.75" fill="none"/>
     <path d="M 900,516.8 L 900,565" stroke="#b5391f" stroke-width="2.75" fill="none"/>
     <path d="M 991.4,411.4 L 991.4,565" stroke="#b5391f" stroke-width="2.75" fill="none"/>
-    <path d="M 900,565 L 1370.8,565" stroke="#b5391f" stroke-width="2.75" fill="none"/>
+    <path d="M 900,565 L 1510,565" stroke="#b5391f" stroke-width="2.75" fill="none"/>
     <circle cx="900" cy="565" r="4.5" fill="#b5391f"/>
     <circle cx="991.4" cy="565" r="4.5" fill="#b5391f"/>
-    <path d="M 1370.8,565 L 1370.8,295.6" stroke="#b5391f" stroke-width="2.75" fill="none" marker-end="url(#aRed)"/>
+    <path d="M 1510,565 L 1510,295.6" stroke="#b5391f" stroke-width="2.75" fill="none" marker-end="url(#aRed)"/>
 
     <!-- Black: GND bus (Panel BLACK). Lands on the pin actually
          silkscreened GND -- the pin one to the right of 5V, not on
          5V itself. -->
     <path d="M 176,520 L 176,700" stroke="#222" stroke-width="2.75" fill="none"/>
     <path d="M 630,377.6 L 630,700" stroke="#222" stroke-width="2.75" fill="none"/>
-    <path d="M 176,700 L 1295.96,700" stroke="#222" stroke-width="3" fill="none"/>
+    <path d="M 176,700 L 1445,700" stroke="#222" stroke-width="3" fill="none"/>
     <circle cx="176" cy="700" r="4.5" fill="#222"/>
     <circle cx="630" cy="700" r="4.5" fill="#222"/>
     <circle cx="750" cy="700" r="4.5" fill="#222"/>
     <circle cx="1050" cy="700" r="4.5" fill="#222"/>
     <path d="M 750,800 L 750,700" stroke="#222" stroke-width="2.75" fill="none"/>
     <path d="M 1050,800 L 1050,700" stroke="#222" stroke-width="2.75" fill="none"/>
-    <path d="M 1295.96,700 L 1295.96,295.6" stroke="#222" stroke-width="2.75" fill="none" marker-end="url(#a)"/>
+    <path d="M 1445,700 L 1445,295.6" stroke="#222" stroke-width="2.75" fill="none" marker-end="url(#a)"/>
 
     <!-- Gold/Yellow: physical Yellow ECP wire (GP26 RX divider) -->
     <path d="M 350,565 L 350,675 L 850,675" stroke="#a3781f" stroke-width="2.75" fill="none" marker-end="url(#aGold)"/>
     <path d="M 850,620 L 850,800" stroke="#a3781f" stroke-width="2.75" fill="none"/>
     <path d="M 1050,620 L 1050,175" stroke="#a3781f" stroke-width="2.75" fill="none"/>
-    <path d="M 1050,175 L 1516.4,175" stroke="#a3781f" stroke-width="2.75" fill="none"/>
+    <path d="M 1050,175 L 1638.4,175" stroke="#a3781f" stroke-width="2.75" fill="none"/>
     <circle cx="1050" cy="175" r="4.5" fill="#a3781f"/>
-    <path d="M 1516.4,175 L 1516.4,295.6" stroke="#a3781f" stroke-width="2.75" fill="none" marker-end="url(#aGold)"/>
+    <path d="M 1638.4,175 L 1638.4,295.6" stroke="#a3781f" stroke-width="2.75" fill="none" marker-end="url(#aGold)"/>
   </svg>
 
   <div class="legend">
