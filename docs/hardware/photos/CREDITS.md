@@ -12,7 +12,7 @@ photos of this project's own bench hardware.
 | `to220-mosfet.jpg` | Generic TO-220 power MOSFET package (stand-in for IRF4905) | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Power_MOSFET.jpg) | Suyash Dwivedi | CC BY-SA 4.0 |
 | `resistor.jpg` | Generic axial resistor (stand-in for all R_B/pull-up/divider resistors) | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:270_ohms_5%25_axial_resistor.jpg) | oomlout | CC BY-SA 2.0 |
 | `vista20p-terminals.jpg` (cropped) | Vista-20P board, terminal strip (terminals 3-9) | [GeoArm product listing](https://www.geoarm.com/vista-20p-honeywell-alarm-control-panel-board-only.html) | Manufacturer/reseller product photo | Product image, used for part identification |
-| `diode.jpg` (rotated level, cropped) | Generic axial zener diode (stand-in for D1, the R_clamp shunt zener) | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Zener_Diode.JPG) | Teravolt (transferred by Nk) | CC BY 3.0 |
+| `diode.jpg` (rotated level, cropped) | Generic axial zener diode (stand-in for D1, the R_clamp shunt zener) | [Electronics For U](https://www.electronicsforu.com/wp-contents/uploads/2024/09/Zener-Diode-1.jpg) | Electronics For U (article illustration) | Editorial/article image, used for part identification |
 
 Images are cropped/resized from the originals; content otherwise
 unaltered, except `diode.jpg` which was also rotated level (the source
