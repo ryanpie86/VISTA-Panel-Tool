@@ -117,22 +117,23 @@ ADC-capable pins (GP26-29) are broken out on this board, resolving the
 | Signal | Pin | Notes |
 |---|---|---|
 | Yellow (panel TX → RP2040 RX, through the 39K/10K divider) | **GP26** (ADC0) | Digital input mode. **Confirmed via the Vista-20P technician manual** — see "Still open" item 1: this doc briefly had Yellow/Green swapped based on a bench observation that turned out to be a correlation error, corrected back once the manual settled it |
-| Green (RP2040 TX → panel, drives Q1's base) | **GP0** | Digital output. Originally GP27 (ADC1), then GP1 — both later found dead on this chip. GP27: bench testing with the drive circuit fully isolated (base/gate resistor lifted) and a firmware-forced, panel-independent announce burst (`Vista::debugForceKeyAnnounce()`) firing every second showed nothing but noise on GP27, while the identical burst came out clean and correctly bit-shaped on GP1. GP1: during the high-side Q1/P1 rebuild, real key-send attempts showed `keySendAddrAnnounced` incrementing every attempt (confirming the firmware executed the Green-TX write) but zero pulses on GP1 itself on a scope in Normal trigger mode at the MCU pin — the identical "firmware wrote it, pin never moved" signature as GP27. Moved to GP0 (already free, see below). Switch device: **high-side driver — Q1 (2N2222) NPN pre-driver/level-shifter feeding P1 (IRF4905) P-channel MOSFET**, 1kΩ base resistor on Q1, 10kΩ gate pull-up on P1, sourcing from a new +12V AUX rail tapped off the panel's own RED terminal — see "Still open" item 1 for the full story of why this replaced first the 2N2222+D1 BJT stage and then the IRLZ44N low-side MOSFET stage |
+| Green (RP2040 TX → panel, drives Q1's base) | **GP1** | Digital output. Originally GP27 (ADC1) — confirmed dead on this chip: bench testing with the drive circuit fully isolated (base/gate resistor lifted) and a firmware-forced, panel-independent announce burst (`Vista::debugForceKeyAnnounce()`) firing every second showed nothing but noise on GP27, while the identical burst came out clean and correctly bit-shaped on GP1. Moved to GP1; a later apparent recurrence of the same "firmware wrote it, pin never moved" signature on GP1 briefly prompted a move to GP0, but that turned out to be a wiring mistake (the base resistor's lead landed on the wrong physical pin), not a second dead GPIO — GP1 tested fine once wired correctly, and Green TX is back on GP1. Switch device: **high-side driver — Q1 (2N2222) NPN pre-driver/level-shifter feeding P1 (IRF4905) P-channel MOSFET**, 1kΩ base resistor on Q1, 10kΩ gate pull-up on P1, sourcing from a new +12V AUX rail tapped off the panel's own RED terminal — see "Still open" item 1 for the full story of why this replaced first the 2N2222+D1 BJT stage and then the IRLZ44N low-side MOSFET stage |
 | Green bus-monitor tap (separate divider, per esphome-vistaECP's `MONITORTX` feature) | **GP28** (ADC2) | Digital input — passively decodes *other* devices' traffic on Green (other keypads, zone expanders, RF receiver modules) that the RP2040 wouldn't otherwise see; not collision detection on the RP2040's own TX. Feeds the future "Wireless (RF) zone visibility" / datalogger-role work in `CONCEPT.md`, not required for near-term ECP read/write |
 | Status LED (WS2812) | **GP16**, internal | Hardwired on-board, not a header pin — nothing to wire |
 
-GP0 was originally earmarked for UART0 alongside GP1 and freed up when the
-Pi interconnect reverted to USB-serial (see "RP2040-Zero <-> Pi
-interconnect" below) — it's now reassigned to Green TX per the row above,
-after GP1 was also found dead. GP1 itself is now unused.
+GP0 was briefly used for Green TX (see the pin-history note above) but is
+unused again now that GP1's "dead pin" diagnosis turned out to be a
+wiring mistake. Both GP0 and GP1 were originally earmarked for UART0 and
+freed up when the Pi interconnect reverted to USB-serial (see "RP2040-Zero
+<-> Pi interconnect" below).
 
 ### Complete bus interface schematic
 
-![RP2040-Zero to Vista-20P bus interface schematic: board silhouette (pin layout matching the Waveshare pinout reference photo) showing all circuits -- Green TX (GP0 through a 1kΩ base resistor to Q1, a 2N2222 NPN pre-driver, whose collector drives P1's gate through a 10kΩ pull-up to a new +12V AUX rail; P1, an IRF4905 P-channel MOSFET, sources current from that same AUX rail onto Green through its drain when Q1 pulls its gate low, through a 330Ω series resistor and an 11V zener shunt to GND that clamp Green's peak to roughly a real keypad's own output level instead of the raw AUX rail), the Green bus-monitor divider (GP28, 33k/10k, tapping the clamped side of that same node), and the Yellow RX divider (GP26, 39k/10k) -- plus a shared GND bus tying the physical GND pin, Q1's emitter, and both dividers to the panel's GND terminal, and the Vista-20P's own 4-terminal bus block (GREEN, RED now wired as the +12V AUX source, BLACK, YELLOW) on the right](docs/hardware/green-tx-schematic.jpg)
+![RP2040-Zero to Vista-20P bus interface schematic: board silhouette (pin layout matching the Waveshare pinout reference photo) showing all circuits -- Green TX (GP1 through a 1kΩ base resistor to Q1, a 2N2222 NPN pre-driver, whose collector drives P1's gate through a 10kΩ pull-up to a new +12V AUX rail; P1, an IRF4905 P-channel MOSFET, sources current from that same AUX rail onto Green through its drain when Q1 pulls its gate low, through a 330Ω series resistor and an 11V zener shunt to GND that clamp Green's peak to roughly a real keypad's own output level instead of the raw AUX rail), the Green bus-monitor divider (GP28, 33k/10k, tapping the clamped side of that same node), and the Yellow RX divider (GP26, 39k/10k) -- plus a shared GND bus tying the physical GND pin, Q1's emitter, and both dividers to the panel's GND terminal, and the Vista-20P's own 4-terminal bus block (GREEN, RED now wired as the +12V AUX source, BLACK, YELLOW) on the right](docs/hardware/green-tx-schematic.jpg)
 
 (Source vector version: `docs/hardware/green-tx-schematic.svg`, same content.)
 
-Board silhouette and pin positions (GND/GP0 on the top board, GP26/GP27/
+Board silhouette and pin positions (GND/GP1 on the top board, GP26/GP27/
 GP28 further down the left column) match the Waveshare RP2040-Zero's own
 pinout reference photo. The board also breaks GND out again on its
 underside pin group (same net) — either GND pad works for the panel tie.
@@ -160,10 +161,10 @@ doesn't show visually:
   driving an idle-low line any higher, which is why neither of those
   earlier designs ever produced an effect on the bus. P1 instead sources
   current onto Green from the new +12V AUX rail; since P1's source sits
-  at +12V rather than GND, GP0 can't drive its gate directly (both logic
+  at +12V rather than GND, GP1 can't drive its gate directly (both logic
   levels would leave Vgs strongly negative), so Q1 acts as an
-  open-collector level shifter: GP0 high pulls Q1's collector (P1's gate)
-  down near 0V, giving P1 a strongly negative Vgs and turning it on; GP0
+  open-collector level shifter: GP1 high pulls Q1's collector (P1's gate)
+  down near 0V, giving P1 a strongly negative Vgs and turning it on; GP1
   low lets the 10kΩ pull-up hold P1's gate at +12V, Vgs=0, off. See
   "Still open" item 1 for the full story of why the low-side approach was
   abandoned after this was discovered.
@@ -408,7 +409,7 @@ Vista panel keypad bus (4-wire ECP)
    **Update (Green TX moved off GP27):** bench testing later found GP27's
    GPIO driver dead on this specific chip — see the current pin table above,
    which now assigns Green TX to GP1 instead. Everything else in this entry
-   (Yellow=GP26, bus-monitor tap=GP28, GP0 unused) still stands.
+   (Yellow=GP26, bus-monitor tap=GP28, GP1 in use) still stands.
 
 ## Still open
 
@@ -680,6 +681,26 @@ Vista panel keypad bus (4-wire ECP)
    across R_clamp (~14V/330Ω ≈ 42mA, ~0.6W) — both parts specified at 1W
    for real margin against that fault case. **Pending: physical build and
    live retest against the real panel.**
+
+   **Update (R_clamp/D1 built, GP1 re-diagnosed -- back on GP1, not
+   dead):** with R_clamp/D1 installed, key sends produced zero effect and
+   `GREENEDGE trace: 0 edges (total ever seen=0)` -- no activity
+   whatsoever, worse than before. Traced with a meter from the panel end
+   back toward the RP2040: Green flat at ~0.2V regardless of sending: P1's
+   drain also flat, meaning P1 never switched; P1's gate stuck at the AUX
+   rail (~14V) instead of pulsing low, meaning Q1 never pulled it down;
+   the 10kΩ gate pull-up itself measured correct, ruling out a wiring
+   fault there. Traced back further to the RP2040's own GP0 pin (Green TX
+   at the time) and found it flat at 0V, never toggling -- initially read
+   as a third dead GPIO, matching the GP27/GP1 pattern closely enough that
+   a move to GP29 was drafted. Turned out to be wrong: **GP1 was never
+   actually dead** -- the "GP1 dead" diagnosis in the update above was
+   based on a build where the base resistor's lead had been landed on the
+   wrong physical pin, not a real GPIO fault. Green TX is back on **GP1**
+   (see the pin table above); GP0 and the drafted GP29 move are both
+   unused. **Pending: confirm GP1 toggles correctly with the base resistor
+   now on the correct physical pin, then retest R_clamp/D1's clamped
+   voltage and live key-send against the real panel.**
 2. **Battery capacity** — deliberately left undecided, and not needed
    during the development/testing phase — the build will run on isolated
    wall power (via the isolated USB-C/DC-DC charge path already in the
