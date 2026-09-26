@@ -51,18 +51,16 @@
 // ---- Pin configuration -------------------------------------------------
 // See HARDWARE_ARCHITECTURE.md "Bus coprocessor: RP2040-Zero" pin table.
 static const int PIN_YELLOW_RX = 26;  // Yellow (panel "data out") -> 39k/10k divider -> GP26
-// Green TX was originally GP27, then GP1 -- now GP0. Same failure pattern
-// both times: bench testing on the high-side Q1/P1 rebuild found
-// keySendAddrAnnounced incrementing on every send (confirming vistaSerial->
-// write() executed, i.e. firmware believes it drove the pin) with zero
-// pulses ever observed on GP1 itself, on a scope in Normal trigger mode
-// directly at the MCU pin -- same "firmware thinks it wrote, pin never
-// moves" signature that isolated GP27 as a dead GPIO driver on this exact
-// chip earlier in the project. GP0 was free (originally earmarked for an
-// abandoned UART0 interconnect plan, never wired to anything). Physical
-// wiring must move the 1k base resistor's input lead from GP1 to GP0 to
-// match.
-static const int PIN_GREEN_TX = 0;    // GP0 -> 1k base resistor -> 2N2222 -> Green ("data in from keypad")
+// Green TX was originally GP27 (confirmed dead: isolated bench testing
+// with a firmware-forced, panel-independent announce burst showed
+// nothing but noise on GP27 while the identical burst came out clean on
+// GP1). Moved to GP1, then to GP0 when GP1 also appeared dead -- but
+// that GP1 diagnosis turned out to be a wiring mistake (the base
+// resistor's lead was on the wrong physical pin, not GP1 itself), not a
+// real dead GPIO. Back on GP1 now that it's wired correctly. Physical
+// wiring must move the 1k base resistor's input lead from GP0 to GP1
+// to match.
+static const int PIN_GREEN_TX = 1;    // GP1 -> 1k base resistor -> 2N2222 -> Green ("data in from keypad")
 static const int PIN_GREEN_MON = 28;  // Green bus-monitor tap -> 33k/10k divider -> GP28
 static const int PIN_STATUS_LED = 16; // Onboard WS2812, hardwired -- nothing to wire
 
@@ -196,14 +194,15 @@ void setup() {
   // on a manual, unverified derivation of bit-content polarity, and that
   // caused a real bench regression: SoftwareSerial's idle level is
   // !invertTx (ECPSoftwareSerial.cpp write()/begin()), so invertTx=false
-  // makes GP0 idle HIGH -- and this build's Q1/P1 high-side stage is
-  // non-inverting (GP0 high -> Q1 on -> node A low -> P1 gate low -> P1
-  // sources onto Green), so an idle-HIGH GP0 drives Green to the full
-  // +12V AUX rail continuously from the moment vista.begin() returns,
-  // independent of whether we ever transmit. That jams the shared bus
-  // for every device on it, not just ours -- confirmed on the bench as a
-  // real physical keypad locking up as soon as the bridge powered on.
-  // invertTx=true (this default) makes GP0 idle LOW -> Green idle LOW,
+  // makes the Green TX pin idle HIGH -- and this build's Q1/P1 high-side
+  // stage is non-inverting (TX pin high -> Q1 on -> node A low -> P1 gate
+  // low -> P1 sources onto Green), so an idle-HIGH TX pin drives Green to
+  // the full +12V AUX rail continuously from the moment vista.begin()
+  // returns, independent of whether we ever transmit. That jams the
+  // shared bus for every device on it, not just ours -- confirmed on the
+  // bench as a real physical keypad locking up as soon as the bridge
+  // powered on. invertTx=true (this default) makes the TX pin idle LOW
+  // -> Green idle LOW,
   // which is the electrically-correct, scope-verified idle/pulse
   // behavior this circuit was built and validated against (node A and
   // P1's drain both swing correctly, Green pulses UP from ~0V idle during
